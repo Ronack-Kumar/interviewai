@@ -44,7 +44,7 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
     }
 
     if (resumeText && resumeText.trim().length > 50) {
-        userPrompt += `.\n\nThe candidate's resume/background:\n${resumeText.substring(0, 2000)}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
+        userPrompt += `.\n\nThe candidate's resume/background:\n${resumeText.substring(0, 500)}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
     } else {
         userPrompt += '.';
     }
