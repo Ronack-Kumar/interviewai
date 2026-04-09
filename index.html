@@ -990,11 +990,7 @@
             animation: spin 0.8s linear infinite;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ── Toast ───────────────────────────────────────── */
         #toast {
@@ -1141,15 +1137,12 @@
             <!-- Resume Upload bar -->
             <div id="resume-bar">
                 <span class="pack-label">📄 Resume:</span>
-                <label id="resume-upload-label" class="pack-btn" for="resume-file-input"
-                    title="Upload your resume to get tailored questions">
+                <label id="resume-upload-label" class="pack-btn" for="resume-file-input" title="Upload your resume to get tailored questions">
                     Upload Resume
                 </label>
-                <input type="file" id="resume-file-input" accept=".txt,.pdf" style="display:none"
-                    onchange="handleResumeUpload(event)">
+                <input type="file" id="resume-file-input" accept=".txt,.pdf" style="display:none" onchange="handleResumeUpload(event)">
                 <span id="resume-status" style="font-size:12px;color:var(--muted);margin-left:6px;"></span>
-                <button id="resume-clear-btn" class="pack-btn" onclick="clearResume()"
-                    style="display:none;color:var(--red)">✕ Clear</button>
+                <button id="resume-clear-btn" class="pack-btn" onclick="clearResume()" style="display:none;color:var(--red)">✕ Clear</button>
             </div>
 
             <!-- Media area -->
@@ -1625,16 +1618,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: state.mode, pack: state.activePack, resumeText: state.resumeText || '' })
             })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.questions && data.questions.length > 0) {
-                        // Pick one that's not the current question
-                        const fresh = data.questions.find(q => q !== state.currentQuestions[state.questionIndex]) || data.questions[0];
-                        state.currentQuestions[state.questionIndex] = fresh;
-                        updateQuestion();
-                    }
-                })
-                .catch(() => showToast('Could not fetch a new question.'));
+            .then(r => r.json())
+            .then(data => {
+                if (data.questions && data.questions.length > 0) {
+                    // Pick one that's not the current question
+                    const fresh = data.questions.find(q => q !== state.currentQuestions[state.questionIndex]) || data.questions[0];
+                    state.currentQuestions[state.questionIndex] = fresh;
+                    updateQuestion();
+                }
+            })
+            .catch(() => showToast('Could not fetch a new question.'));
         }
 
         function clearAnswer() {
