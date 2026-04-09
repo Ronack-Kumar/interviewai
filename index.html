@@ -952,6 +952,50 @@
             color: var(--muted);
         }
 
+        #resume-bar {
+            display: flex;
+            gap: 8px;
+            padding: 8px 24px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        #resume-upload-label {
+            cursor: pointer;
+            display: inline-block;
+        }
+
+        #resume-upload-label.uploaded {
+            border-color: var(--green);
+            color: var(--green);
+            background: rgba(52, 199, 89, 0.08);
+        }
+
+        .q-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-style: italic;
+            font-size: 15px;
+        }
+
+        .q-loading-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         /* ── Toast ───────────────────────────────────────── */
         #toast {
             position: fixed;
@@ -1092,6 +1136,20 @@
                 <button class="pack-btn" onclick="selectPack('infosys')" id="pack-infosys">Infosys</button>
                 <button class="pack-btn" onclick="selectPack('wipro')" id="pack-wipro">Wipro</button>
                 <button class="pack-btn" onclick="selectPack('faang')" id="pack-faang">FAANG</button>
+            </div>
+
+            <!-- Resume Upload bar -->
+            <div id="resume-bar">
+                <span class="pack-label">📄 Resume:</span>
+                <label id="resume-upload-label" class="pack-btn" for="resume-file-input"
+                    title="Upload your resume to get tailored questions">
+                    Upload Resume
+                </label>
+                <input type="file" id="resume-file-input" accept=".txt,.pdf" style="display:none"
+                    onchange="handleResumeUpload(event)">
+                <span id="resume-status" style="font-size:12px;color:var(--muted);margin-left:6px;"></span>
+                <button id="resume-clear-btn" class="pack-btn" onclick="clearResume()"
+                    style="display:none;color:var(--red)">✕ Clear</button>
             </div>
 
             <!-- Media area -->
@@ -1264,94 +1322,6 @@
     </div>
 
     <script>
-        // ── Indian Company Question Packs ──────────────────────────
-        const companyPacks = {
-            general: null, // uses default questions[mode]
-            tcs: [
-                "What is SDLC and explain each phase briefly?",
-                "Differentiate between abstract class and interface in Java.",
-                "What is normalization? Explain 1NF, 2NF, 3NF with examples.",
-                "Explain the concept of OOPS with real-world examples.",
-                "What is the difference between HashMap and HashTable in Java?",
-                "Explain TCP/IP model and its layers.",
-                "What is a deadlock? How can it be prevented?",
-                "Write a program to reverse a string without using built-in functions.",
-                "What is the difference between overloading and overriding?",
-                "Explain the concept of multithreading with an example."
-            ],
-            infosys: [
-                "Explain microservices architecture vs monolithic architecture.",
-                "What is Agile methodology? How is it different from Waterfall?",
-                "Explain the concept of REST API. What are HTTP methods?",
-                "What is cloud computing? Explain IaaS, PaaS, SaaS with examples.",
-                "What is the difference between SQL JOIN types with examples?",
-                "Explain design patterns — Singleton, Factory, Observer.",
-                "What is Docker and how does containerization work?",
-                "Explain Git branching strategy for a large team project.",
-                "What is the role of a cache in system performance?",
-                "Describe how you would debug a memory leak in production."
-            ],
-            wipro: [
-                "What is the difference between process and thread?",
-                "Explain binary search and give its time complexity.",
-                "What is a foreign key? Explain referential integrity.",
-                "What is MVC architecture? How does it work?",
-                "Explain the difference between GET and POST in HTTP.",
-                "What are ACID properties in databases?",
-                "Explain recursion with a factorial example.",
-                "What is an API? How would you test one?",
-                "What is the difference between ArrayList and LinkedList?",
-                "Describe a project you built end-to-end. What challenges did you face?"
-            ],
-            faang: [
-                "Design a distributed key-value store like DynamoDB. How do you handle consistency?",
-                "Implement LRU cache. What is the time and space complexity?",
-                "How would you design Twitter's trending topics feature at 100M users?",
-                "Explain CAP theorem. Which trade-offs does your system make?",
-                "Given an array, find the maximum subarray sum. Explain Kadane's algorithm.",
-                "How does Google's Bigtable differ from traditional RDBMS?",
-                "Design a rate limiter for an API. What algorithm would you use?",
-                "Explain consistent hashing. Where is it used in production systems?",
-                "Find all permutations of a string. What is the time complexity?",
-                "How would you handle a 10x traffic spike with zero downtime?"
-            ]
-        };
-
-        // ── Question bank ──────────────────────────────────────────
-        const questions = {
-            technical: [
-                "Explain the difference between SQL and NoSQL databases. When would you choose one over the other?",
-                "What is the time complexity of quicksort in the worst case and how can it be improved?",
-                "Describe how you would design a URL shortening service like bit.ly at scale.",
-                "What is the difference between a thread and a process? How does context switching work?",
-                "Explain REST vs GraphQL. What are the trade-offs of each?",
-                "How does garbage collection work in modern languages like Java or Python?",
-                "What is a load balancer and what strategies does it use to distribute traffic?"
-            ],
-            hr: [
-                "Tell me about a time you had to lead a project under a tight deadline. What was your approach?",
-                "Describe a situation where you disagreed with your manager. How did you handle it?",
-                "Give an example of a time you failed at something significant. What did you learn?",
-                "Tell me about a time you had to work with a difficult teammate. What was the outcome?",
-                "Describe your greatest professional achievement and how you accomplished it.",
-                "Tell me about a time you had to quickly learn a new technology or skill."
-            ],
-            case: [
-                "Your client's e-commerce revenue dropped 20% last quarter despite stable traffic. How do you diagnose and fix this?",
-                "A hospital wants to reduce patient wait times by 30%. Walk me through your analysis framework.",
-                "Estimate the market size for electric scooter rentals in Chennai.",
-                "A food delivery startup has low driver retention. What factors would you investigate?",
-                "How would you prioritize a product roadmap for a B2B SaaS tool with 50 feature requests?"
-            ],
-            stress: [
-                "Why should we hire you over someone with 5 more years of experience?",
-                "Your last answer was very generic. Can you give me something more specific and technical?",
-                "That solution wouldn't scale. What would you do differently?",
-                "If your entire approach was wrong, how would you pivot right now?",
-                "Why have you changed jobs so frequently?"
-            ]
-        };
-
         // ── Filler words ───────────────────────────────────────────
         const FILLERS = ['um', 'uh', 'like', 'basically', 'literally', 'you know', 'i mean', 'sort of', 'kind of', 'right', 'okay so', 'so yeah', 'actually', 'obviously', 'honestly'];
 
@@ -1371,8 +1341,10 @@
             audioOnlyMode: false,
             baseFontSize: 16,
             activePack: 'general',
-            answeredQuestions: [],   // track which indices answered
-            sessionHistory: []       // [{q, score, feedback}]
+            answeredQuestions: [],
+            sessionHistory: [],
+            resumeText: '',
+            resumeFileName: ''
         };
 
         // ── Streak logic ───────────────────────────────────────────
@@ -1423,37 +1395,131 @@
             });
         }
 
+        // ── Resume upload ──────────────────────────────────────────
+        async function handleResumeUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const statusEl = document.getElementById('resume-status');
+            const labelEl = document.getElementById('resume-upload-label');
+            const clearBtn = document.getElementById('resume-clear-btn');
+
+            statusEl.textContent = 'Reading…';
+
+            try {
+                let text = '';
+                if (file.type === 'application/pdf') {
+                    // For PDF: read as text using FileReader (basic extraction)
+                    const arrayBuffer = await file.arrayBuffer();
+                    // Extract readable text from PDF bytes
+                    const uint8 = new Uint8Array(arrayBuffer);
+                    const raw = new TextDecoder('latin1').decode(uint8);
+                    // Pull out text between BT and ET markers (basic PDF text)
+                    const matches = raw.match(/\(([^)]{2,})\)/g) || [];
+                    text = matches.map(m => m.slice(1, -1)).join(' ').replace(/\\n/g, ' ').trim();
+                    if (text.length < 50) {
+                        // Fallback: just use filename as hint
+                        text = `Resume file: ${file.name}`;
+                    }
+                } else {
+                    text = await file.text();
+                }
+
+                state.resumeText = text.substring(0, 3000);
+                state.resumeFileName = file.name;
+
+                statusEl.textContent = `✓ ${file.name}`;
+                labelEl.textContent = '✓ Resume loaded';
+                labelEl.classList.add('uploaded');
+                clearBtn.style.display = 'inline-block';
+
+                showToast('Resume loaded! Questions will be tailored to your profile.');
+                // Reload questions with resume context
+                await loadQuestions();
+            } catch (err) {
+                statusEl.textContent = 'Failed to read file';
+                console.error(err);
+            }
+        }
+
+        function clearResume() {
+            state.resumeText = '';
+            state.resumeFileName = '';
+            document.getElementById('resume-status').textContent = '';
+            document.getElementById('resume-upload-label').textContent = 'Upload Resume';
+            document.getElementById('resume-upload-label').classList.remove('uploaded');
+            document.getElementById('resume-clear-btn').style.display = 'none';
+            document.getElementById('resume-file-input').value = '';
+            loadQuestions();
+        }
+
+        // ── Dynamic question loader ────────────────────────────────
+        async function loadQuestions() {
+            // Show loading state
+            const qEl = document.getElementById('question-text');
+            qEl.innerHTML = '<span class="q-loading"><span class="q-loading-spinner"></span>Generating questions…</span>';
+            document.querySelectorAll('.ctrl-btn').forEach(b => b.disabled = true);
+
+            try {
+                const res = await fetch('/api/questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: state.mode,
+                        pack: state.activePack,
+                        resumeText: state.resumeText || ''
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!data.questions || !Array.isArray(data.questions)) {
+                    throw new Error('Invalid response');
+                }
+
+                state.currentQuestions = data.questions.slice(0, 5);
+                state.questionIndex = 0;
+                state.scores = [];
+                state.answeredQuestions = [];
+                state.sessionHistory = [];
+                updateQuestion();
+                updateStats();
+                clearFeedback();
+                document.getElementById('history-list').innerHTML = '';
+            } catch (err) {
+                console.error('Failed to load questions:', err);
+                // Fallback to basic questions if API fails
+                const fallback = {
+                    technical: ["Explain the difference between SQL and NoSQL databases.", "What is the time complexity of quicksort?", "How would you design a URL shortening service?", "What is the difference between a thread and a process?", "Explain REST vs GraphQL trade-offs."],
+                    hr: ["Tell me about a time you led a project under a tight deadline.", "Describe a situation where you disagreed with your manager.", "Give an example of a time you failed. What did you learn?", "Tell me about working with a difficult teammate.", "Describe your greatest professional achievement."],
+                    case: ["Your client's revenue dropped 20% last quarter. How do you diagnose this?", "A hospital wants to reduce patient wait times by 30%. Walk me through your approach.", "Estimate the market size for electric scooter rentals in your city.", "A food delivery startup has low driver retention. What would you investigate?", "How would you prioritize a product roadmap with 50 feature requests?"],
+                    stress: ["Why should we hire you over someone with 5 more years of experience?", "Your last answer was generic. Give me something more specific.", "That solution wouldn't scale. What would you do differently?", "If your entire approach was wrong, how would you pivot?", "Why have you changed jobs so frequently?"]
+                };
+                state.currentQuestions = fallback[state.mode] || fallback.technical;
+                state.questionIndex = 0;
+                state.scores = [];
+                state.answeredQuestions = [];
+                state.sessionHistory = [];
+                showToast('Using offline questions — check API connection.');
+                updateQuestion();
+                updateStats();
+                clearFeedback();
+            } finally {
+                document.querySelectorAll('.ctrl-btn').forEach(b => b.disabled = false);
+            }
+        }
+
         // ── Company pack selector ──────────────────────────────────
         function selectPack(pack) {
             state.activePack = pack;
             document.querySelectorAll('.pack-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('pack-' + pack).classList.add('active');
-            // reload questions for this pack
-            let pool;
-            if (pack === 'general' || !companyPacks[pack]) {
-                pool = [...questions.technical];
-            } else {
-                pool = [...companyPacks[pack]];
-            }
-            state.currentQuestions = shuffle(pool).slice(0, 5);
-            state.questionIndex = 0;
-            state.scores = [];
-            state.answeredQuestions = [];
-            state.sessionHistory = [];
-            updateQuestion();
-            updateStats();
-            clearFeedback();
-            document.getElementById('history-list').innerHTML = '';
+            loadQuestions();
         }
 
         function setMode(mode) {
             state.mode = mode;
-            state.questionIndex = 0;
-            state.scores = [];
-            state.answeredQuestions = [];
-            state.sessionHistory = [];
             state.activePack = 'general';
-            state.currentQuestions = shuffle([...questions[mode]]).slice(0, 5);
 
             document.querySelectorAll('.mode-btn').forEach(b => {
                 b.classList.remove('active');
@@ -1472,10 +1538,7 @@
                 packBar.classList.remove('visible');
             }
 
-            updateQuestion();
-            updateStats();
-            clearFeedback();
-            document.getElementById('history-list').innerHTML = '';
+            loadQuestions();
         }
 
         function updateQuestion() {
@@ -1556,10 +1619,22 @@
         }
 
         function shuffleQuestion() {
-            const pool = questions[state.mode].filter(q => q !== state.currentQuestions[state.questionIndex]);
-            const newQ = pool[Math.floor(Math.random() * pool.length)];
-            state.currentQuestions[state.questionIndex] = newQ;
-            updateQuestion();
+            // Generate a single fresh question via API
+            fetch('/api/questions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: state.mode, pack: state.activePack, resumeText: state.resumeText || '' })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.questions && data.questions.length > 0) {
+                        // Pick one that's not the current question
+                        const fresh = data.questions.find(q => q !== state.currentQuestions[state.questionIndex]) || data.questions[0];
+                        state.currentQuestions[state.questionIndex] = fresh;
+                        updateQuestion();
+                    }
+                })
+                .catch(() => showToast('Could not fetch a new question.'));
         }
 
         function clearAnswer() {
