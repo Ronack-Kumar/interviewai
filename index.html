@@ -1709,7 +1709,7 @@
             document.getElementById('ideal-answer-box').style.display = 'none';
 
             try {
-                const res = await fetch('/api/evaluate', {
+                const res = await fetch('/api/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question, answer, mode: state.mode })
@@ -1803,7 +1803,7 @@
             const question = document.getElementById('question-text').textContent;
             document.getElementById('ai-feedback-text').innerHTML = '<span class="loading-dots">Getting hint</span>';
             try {
-                const res = await fetch('/api/evaluate', {
+                const res = await fetch('/api/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question, answer: 'Give me a hint only, not feedback.', mode: 'hint' })
