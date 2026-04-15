@@ -1080,7 +1080,7 @@
                 <div class="sidebar-label">Session Progress</div>
                 <div class="progress-item">
                     <span style="font-size:13px">Questions</span>
-                    <span id="prog-text" style="font-size:13px;color:var(--accent)">0 / 5</span>
+                    <span id="prog-text" style="font-size:13px;color:var(--accent)">0 / —</span>
                 </div>
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill" id="prog-bar" style="width:0%"></div>
@@ -1120,11 +1120,11 @@
         <section id="center" aria-label="Interview question and answer area">
             <!-- Mode tabs -->
             <div id="mode-tabs" role="tablist">
-                <button class="tab-btn active" role="tab" aria-selected="true" onclick="switchTab('video')">📹
+                <button class="tab-btn active" role="tab" aria-selected="true" onclick="switchTab('video', event)">📹
                     Video</button>
-                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('audio')">🎙️ Audio
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('audio', event)">🎙️ Audio
                     Only</button>
-                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('text')">✏️ Text
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('text', event)">✏️ Text
                     Only</button>
             </div>
 
@@ -1184,7 +1184,7 @@
             <!-- Question -->
             <div id="question-area">
                 <div class="q-header">
-                    <div class="q-num" id="q-num" aria-label="Question number">Q1 of 5</div>
+                    <div class="q-num" id="q-num" aria-label="Question number">Loading…</div>
                     <div class="q-actions">
                         <button class="icon-btn" title="Shuffle question" onclick="shuffleQuestion()"
                             aria-label="Shuffle question">🔀</button>
@@ -1234,6 +1234,13 @@
                     <button class="ctrl-btn btn-next" onclick="nextQuestion()" aria-label="Next question">
                         Next →
                     </button>
+                </div>
+                <div id="shortcut-hint" style="font-size:11px;color:var(--muted);margin-top:8px;font-family:var(--mono)">
+                    <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px">Ctrl+Enter</kbd> submit
+                    &nbsp;·&nbsp;
+                    <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px">Ctrl+→</kbd> next
+                    &nbsp;·&nbsp;
+                    <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px">Ctrl+M</kbd> mic
                 </div>
             </div>
         </section>
@@ -1316,7 +1323,8 @@
             </div>
             <div class="modal-actions" style="margin-top:24px">
                 <button class="ctrl-btn btn-primary" onclick="closeReport()">Practice Again</button>
-                <button class="ctrl-btn btn-secondary" onclick="closeReport()">Close</button>
+                <button class="ctrl-btn btn-secondary" onclick="copyResults()" id="btn-copy-results">📋 Copy Results</button>
+                <button class="ctrl-btn btn-secondary" onclick="closeReport()" style="border-color:var(--border);color:var(--muted)">Close</button>
             </div>
         </div>
     </div>
@@ -1344,8 +1352,19 @@
             answeredQuestions: [],
             sessionHistory: [],
             resumeText: '',
-            resumeFileName: ''
+            resumeFileName: '',
+            userId: ''
         };
+
+        // ── Anonymous user identity ────────────────────────────────
+        function getOrCreateUserId() {
+            let uid = localStorage.getItem('mockprep_uid');
+            if (!uid) {
+                uid = 'u_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+                localStorage.setItem('mockprep_uid', uid);
+            }
+            return uid;
+        }
 
         // ── Streak logic ───────────────────────────────────────────
         function checkStreak() {
@@ -1374,11 +1393,13 @@
 
         // ── Init ───────────────────────────────────────────────────
         function init() {
+            state.userId = getOrCreateUserId();
             state.sessionCount++;
             localStorage.setItem('sessionCount', state.sessionCount);
             document.getElementById('stat-sessions').textContent = state.sessionCount;
             checkStreak();
             setMode('technical');
+            loadHistory();
         }
 
         // ── Progress dots ──────────────────────────────────────────
@@ -1409,17 +1430,17 @@
             try {
                 let text = '';
                 if (file.type === 'application/pdf') {
-                    // For PDF: read as text using FileReader (basic extraction)
+                    // PDF extraction is limited in the browser without pdf.js.
+                    // We attempt a basic extraction and warn the user if it yields too little.
                     const arrayBuffer = await file.arrayBuffer();
-                    // Extract readable text from PDF bytes
                     const uint8 = new Uint8Array(arrayBuffer);
                     const raw = new TextDecoder('latin1').decode(uint8);
-                    // Pull out text between BT and ET markers (basic PDF text)
                     const matches = raw.match(/\(([^)]{2,})\)/g) || [];
                     text = matches.map(m => m.slice(1, -1)).join(' ').replace(/\\n/g, ' ').trim();
-                    if (text.length < 50) {
-                        // Fallback: just use filename as hint
+                    if (text.length < 80) {
+                        // Extraction failed (compressed/modern PDF) — ask user to paste text
                         text = `Resume file: ${file.name}`;
+                        showToast('⚠️ PDF text could not be extracted. For best results, paste your resume text directly into the answer box and use a .txt file instead.');
                     }
                 } else {
                     text = await file.text();
@@ -1434,7 +1455,6 @@
                 clearBtn.style.display = 'inline-block';
 
                 showToast('Resume loaded! Questions will be tailored to your profile.');
-                // Reload questions with resume context
                 await loadQuestions();
             } catch (err) {
                 statusEl.textContent = 'Failed to read file';
@@ -1618,6 +1638,28 @@
             setTimeout(() => setMode(state.mode), 300);
         }
 
+        function copyResults() {
+            const s = state.scores;
+            if (s.length === 0) { showToast('No results to copy.'); return; }
+            const avg = (s.reduce((a, b) => a + b, 0) / s.length).toFixed(1);
+            const best = Math.max(...s);
+            const mode = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
+            const lines = [
+                `MockPrep Session Report`,
+                `Mode: ${mode} Interview`,
+                `Questions answered: ${s.length}`,
+                `Average score: ${avg}/10`,
+                `Best score: ${best}/10`,
+                '',
+                'Question Breakdown:',
+                ...state.sessionHistory.map((item, i) => `  Q${i + 1}. [${item.score}/10] ${item.q.substring(0, 70)}`)
+            ];
+            const text = lines.join('\n');
+            navigator.clipboard.writeText(text)
+                .then(() => showToast('📋 Results copied to clipboard!'))
+                .catch(() => showToast('Could not access clipboard.'));
+        }
+
         function shuffleQuestion() {
             // Generate a single fresh question via API
             fetch('/api/questions', {
@@ -1658,13 +1700,18 @@
             }
         }
 
-        function switchTab(tab) {
+        function switchTab(tab, event) {
             document.querySelectorAll('.tab-btn').forEach((b, i) => {
                 b.classList.remove('active');
                 b.setAttribute('aria-selected', 'false');
             });
-            event.target.classList.add('active');
-            event.target.setAttribute('aria-selected', 'true');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+                event.currentTarget.setAttribute('aria-selected', 'true');
+            } else if (event && event.target) {
+                event.target.classList.add('active');
+                event.target.setAttribute('aria-selected', 'true');
+            }
 
             if (tab === 'audio') {
                 document.getElementById('video-box').style.display = 'none';
@@ -1774,6 +1821,10 @@
             const question = document.getElementById('question-text').textContent;
 
             if (!answer) { showToast('Please enter or record an answer first'); return; }
+            if (answer.length > 2000) {
+                showToast(`Answer too long (${answer.length}/2000 chars). Please be more concise.`);
+                return;
+            }
 
             // Detect fillers immediately on submit
             detectFillers(answer);
@@ -1793,13 +1844,15 @@
                 if (parsed.error) throw new Error(parsed.error);
                 renderFeedback(parsed, question, answer);
             } catch (e) {
-                document.getElementById('ai-feedback-text').textContent = 'Error getting feedback. Please try again.';
+                document.getElementById('ai-feedback-text').innerHTML =
+                    `<span style="color:var(--red)">⚠ ${e.message || 'Failed to get feedback.'}</span>` +
+                    `<br><br><button class="ctrl-btn btn-secondary" style="margin-top:8px" onclick="submitAnswer()">Retry</button>`;
                 showToast('API error: ' + (e.message || 'Unknown'));
             }
         }
 
         function renderFeedback(data, question, answer) {
-            const { score, accuracy, clarity, depth, feedback, idealAnswer } = data;
+            const { score, accuracy, clarity, depth, feedback, idealAnswer, scoreReason, star_score } = data;
 
             // Score ring
             const deg = (score / 10) * 360;
@@ -1817,8 +1870,16 @@
             document.getElementById('bar-depth').style.width = depth + '%';
             document.getElementById('metrics-section').style.display = 'block';
 
-            // Text
-            document.getElementById('ai-feedback-text').textContent = feedback;
+            // Feedback text with score reason
+            let feedbackHTML = '';
+            if (scoreReason) {
+                feedbackHTML += `<div style="font-size:12px;color:var(--accent);margin-bottom:8px;font-weight:500">🎯 ${scoreReason}</div>`;
+            }
+            if (star_score !== undefined && state.mode === 'hr') {
+                feedbackHTML += `<div style="font-size:12px;color:var(--amber);margin-bottom:8px">⭐ STAR score: ${star_score}/4</div>`;
+            }
+            feedbackHTML += `<div>${feedback}</div>`;
+            document.getElementById('ai-feedback-text').innerHTML = feedbackHTML;
 
             // Ideal answer
             if (idealAnswer) {
@@ -1878,13 +1939,14 @@
             const question = document.getElementById('question-text').textContent;
             document.getElementById('ai-feedback-text').innerHTML = '<span class="loading-dots">Getting hint</span>';
             try {
-                const res = await fetch('/api/feedback', {
+                const res = await fetch('/api/hint', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question, answer: 'Give me a hint only, not feedback.', mode: 'hint' })
+                    body: JSON.stringify({ question, mode: state.mode })
                 });
                 const data = await res.json();
-                document.getElementById('ai-feedback-text').textContent = '💡 ' + (data.feedback || 'Think about the key concepts related to this topic.');
+                if (data.error) throw new Error(data.error);
+                document.getElementById('ai-feedback-text').textContent = '💡 ' + (data.hint || 'Think about the key concepts related to this topic.');
             } catch (e) {
                 document.getElementById('ai-feedback-text').textContent = 'Could not get hint.';
             }
@@ -1896,10 +1958,48 @@
                 await fetch('/api/save-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: state.mode, question, answer, score, accuracy, clarity, depth, feedback })
+                    body: JSON.stringify({
+                        mode: state.mode,
+                        question,
+                        answer,
+                        score,
+                        accuracy,
+                        clarity,
+                        depth,
+                        feedback,
+                        user_id: state.userId
+                    })
                 });
             } catch (e) {
                 console.warn('Session save failed:', e);
+            }
+        }
+
+        // ── Load history from Supabase ─────────────────────────────
+        async function loadHistory() {
+            if (!state.userId) return;
+            try {
+                const res = await fetch(`/api/get-history?user_id=${encodeURIComponent(state.userId)}&limit=10`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) return;
+                const historyList = document.getElementById('history-list');
+                // Add a divider for past sessions
+                const divider = document.createElement('div');
+                divider.style.cssText = 'font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;font-weight:600';
+                divider.textContent = 'Past Sessions';
+                historyList.appendChild(divider);
+                data.forEach(item => {
+                    const color = item.score >= 7 ? 'var(--green)' : item.score >= 5 ? 'var(--amber)' : 'var(--red)';
+                    const el = document.createElement('div');
+                    el.className = 'history-item';
+                    el.style.opacity = '0.7';
+                    el.innerHTML = `<span class="history-score" style="color:${color}">${item.score}/10</span><div class="history-q">${(item.question || '').substring(0, 60)}…</div>`;
+                    historyList.appendChild(el);
+                });
+            } catch (e) {
+                // History loading is non-critical — fail silently
+                console.warn('Could not load history:', e);
             }
         }
 

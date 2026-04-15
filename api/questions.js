@@ -1,7 +1,19 @@
 // api/questions.js
 // Generates interview questions dynamically using Groq LLM
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') {
+        return res.status(200).set(CORS_HEADERS).end();
+    }
+
+    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -43,8 +55,11 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
         userPrompt += ` specifically for a ${packDescriptions[pack]} interview`;
     }
 
-    if (resumeText && resumeText.trim().length > 50) {
-        userPrompt += `.\n\nThe candidate's resume/background:\n${resumeText.substring(0, 500)}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
+    // Server-side resume text cap (max 500 chars) — enforced even if client sends more
+    const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
+
+    if (safeResumeText.trim().length > 50) {
+        userPrompt += `.\n\nThe candidate's resume/background:\n${safeResumeText}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
     } else {
         userPrompt += '.';
     }
