@@ -35,7 +35,7 @@ export async function POST(request) {
   if (!answer || typeof answer !== 'string' || answer.length > MAX_ANS) {
     return Response.json({ error: 'Invalid answer' }, { status: 400 });
   }
-  if (typeof score !== 'number' || score < 1 || score > 10) {
+  if (score !== undefined && score !== null && (typeof score !== 'number' || score < 1 || score > 10)) {
     return Response.json({ error: 'Score must be between 1 and 10' }, { status: 400 });
   }
 
