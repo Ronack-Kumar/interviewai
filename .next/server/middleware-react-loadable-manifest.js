@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST="{\"app\\\\page.js -> ./components/CodeWorkspace\":{\"id\":\"app\\\\page.js -> ./components/CodeWorkspace\",\"files\":[\"static/chunks/_app-pages-browser_app_components_CodeWorkspace_js.js\"]}}"
