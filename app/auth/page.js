@@ -279,6 +279,30 @@ export default function AuthPage() {
             {signUpError ? <p className="auth-error">{signUpError}</p> : null}
           </form>
         )}
+
+        {/* Guest access */}
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <p style={{ color: 'var(--muted)', fontSize: 12, margin: '0 0 8px' }}>
+            Just exploring?
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              color: 'var(--muted)',
+              fontSize: 13,
+              cursor: 'pointer',
+              padding: '8px 20px',
+              width: '100%',
+            }}
+          >
+            Continue as Guest — 3 free sessions
+          </button>
+        </div>
+
       </div>
     </div>
   );
