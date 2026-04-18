@@ -1,6 +1,8 @@
 // Generates interview questions / coding problems via Groq
 
 export async function POST(request) {
+  console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
+  console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 8));
   const body = await request.json();
   const { mode, pack, resumeText, role } = body;
 
