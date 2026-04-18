@@ -144,25 +144,19 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
   let systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
-Make questions varied in difficulty and topic. Avoid repetition.
-Generate completely unique questions. Never repeat common questions like "tell me about yourself" or "what is OOP". Be creative and specific to the role. Each question must be distinct in topic and phrasing.`;
-
+Make questions varied in difficulty and topic. Avoid repetition.`;
   let userPrompt = `Generate 8 ${modeDescriptions[mode] || 'interview'} questions for a ${roleLabel} interview`;
 
   if (pack && pack !== 'general' && packDescriptions[pack]) {
     userPrompt += ` specifically for a ${packDescriptions[pack]} interview`;
   }
-
+  
   if (safeResumeText.trim().length > 50) {
     userPrompt += `.\n\nThe candidate's resume/background:\n${safeResumeText}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
   } else {
     userPrompt += '.';
   }
-  const pool = [...(topicPools[mode] || topicPools.technical)];
-  pool.sort(() => Math.random() - 0.5);
-  const pickedTopics = pool.slice(0, 8);
-  userPrompt += `\n\nCover exactly one topic per question from this session topic list (no topic repeats): ${pickedTopics.join(', ')}.`;
-
+  userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -210,3 +204,4 @@ Generate completely unique questions. Never repeat common questions like "tell m
     return Response.json({ error: 'Failed to generate questions', detail: err.message }, { status: 500 });
   }
 }
+
