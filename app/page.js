@@ -485,6 +485,10 @@ export default function Page() {
       clearFeedback();
       setQuestionHint('');
       try {
+        if (!mode) {
+          console.warn('[MockPrep] Skipping /api/questions call: mode is undefined');
+          throw new Error('Mode is not set');
+        }
         const payload =
           mode === 'coding'
             ? {
@@ -500,6 +504,12 @@ export default function Page() {
                 resumeText: rt || '',
                 role: selectedRole,
               };
+        console.log('[MockPrep] POST /api/questions payload:', {
+          mode: payload.mode,
+          role: payload.role,
+          pack: payload.pack,
+          resumeText: payload.resumeText,
+        });
         const res = await fetch('/api/questions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
