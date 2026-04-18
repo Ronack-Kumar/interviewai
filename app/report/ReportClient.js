@@ -39,21 +39,21 @@ function computeRadarRows(answers) {
     scores.length > 1
       ? scores.reduce((s, x) => s + (x - mean) * (x - mean), 0) / scores.length
       : 0;
-  const consistency = Math.max(0, Math.min(100, 100 - variance * 25));
+  const consistency = Math.max(0, Math.min(10, 10 - variance * 2.5));
   let commSum = 0;
   for (const a of answers) {
     const words = (a.answer || '').split(/\s+/).filter(Boolean).length;
-    const structure = (a.answer || '').split(/\n\n/).length;
-    const raw = Math.min(100, words / 8 + structure * 12);
+    const structure = (a.answer || '').split(/\n+/).filter(Boolean).length;
+    const raw = Math.min(10, words / 45 + structure * 1.2);
     commSum += raw;
   }
-  const communication = commSum / n;
+  const communication = Math.min(10, commSum / n);
   return [
-    { metric: 'Accuracy', value: Math.round(acc) },
-    { metric: 'Clarity', value: Math.round(clar) },
-    { metric: 'Depth', value: Math.round(dep) },
-    { metric: 'Communication', value: Math.round(communication) },
-    { metric: 'Consistency', value: Math.round(consistency) },
+    { metric: 'Accuracy', value: Number(acc.toFixed(1)) },
+    { metric: 'Clarity', value: Number(clar.toFixed(1)) },
+    { metric: 'Depth', value: Number(dep.toFixed(1)) },
+    { metric: 'Communication', value: Number(communication.toFixed(1)) },
+    { metric: 'Consistency', value: Number(consistency.toFixed(1)) },
   ];
 }
 
@@ -165,7 +165,7 @@ export default function ReportClient() {
     name: `Q${i + 1}`,
     score: typeof a.score === 'number' ? a.score : 0,
   }));
-  const weak = answers.filter((a) => (a.score || 0) < 6);
+  const weak = answers.filter((a) => (a.score || 0) < 4);
 
   if (loading) {
     return (
@@ -281,6 +281,7 @@ export default function ReportClient() {
                   fillOpacity={0.35}
                 />
                 <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
+                <YAxis domain={[0, 10]} hide />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -305,6 +306,11 @@ export default function ReportClient() {
                     <Cell key={i} fill={barColor(e.score)} />
                   ))}
                 </Bar>
+                <Bar
+                  dataKey="score"
+                  fillOpacity={0}
+                  label={{ position: 'top', fill: 'var(--text-secondary)', fontSize: 11 }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

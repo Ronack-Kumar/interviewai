@@ -320,6 +320,10 @@ export default function Page() {
   const [videoActive, setVideoActive] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [cameraLost, setCameraLost] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [guestCount, setGuestCount] = useState(0);
+  const [guestLimitModalOpen, setGuestLimitModalOpen] = useState(false);
+  const [guestSubmitLocked, setGuestSubmitLocked] = useState(false);
   const [userId, setUserId] = useState('');
   const [authUser, setAuthUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -453,7 +457,7 @@ export default function Page() {
   }, []);
 
   const fetchHistory = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || guestMode) return;
     setHistoryLoading(true);
     try {
       const res = await fetch(
@@ -468,7 +472,7 @@ export default function Page() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [userId, showToast]);
+  }, [userId, guestMode, showToast]);
 
   const clearFeedback = useCallback(() => {
     setFeedbackData(null);
@@ -605,12 +609,14 @@ export default function Page() {
       } = await supabase.auth.getUser();
       if (!mounted) return;
       if (!user) {
-        router.replace('/auth');
-        setAuthReady(true);
-        return;
+        setGuestMode(true);
+        setAuthUser(null);
+        setUserId('');
+      } else {
+        setGuestMode(false);
+        setUserId(user.id);
+        setAuthUser(user);
       }
-      setUserId(user.id);
-      setAuthUser(user);
       setAuthReady(true);
     }
 
@@ -623,7 +629,7 @@ export default function Page() {
       const u = session?.user ?? null;
       setAuthUser(u);
       setUserId(u?.id ?? '');
-      if (!u) router.replace('/auth');
+      setGuestMode(!u);
     });
 
     return () => {
@@ -638,7 +644,7 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !userId) return;
+    if (!authReady || (!userId && !guestMode)) return;
     if (!initDone.current) {
       initDone.current = true;
       setSessionCount(parseInt(localStorage.getItem('mockprep_sessions_total') || '0', 10));
@@ -646,13 +652,18 @@ export default function Page() {
       setModeState('technical');
       setActivePack('general');
       try {
-        const tp = localStorage.getItem('timerPreset');
+        const tp = localStorage.getItem('timerPref') || localStorage.getItem('timerPreset');
         if (tp === '15' || tp === '30' || tp === '45' || tp === 'none') setTimerPreset(tp);
+        const gc = parseInt(localStorage.getItem('guestCount') || '0', 10);
+        if (!Number.isNaN(gc)) {
+          setGuestCount(gc);
+          setGuestSubmitLocked(gc >= 3);
+        }
       } catch {
         /* ignore */
       }
     }
-  }, [authReady, userId, checkStreak]);
+  }, [authReady, userId, guestMode, checkStreak]);
 
   useEffect(() => {
     questionStartedAtRef.current = Date.now();
@@ -701,9 +712,9 @@ export default function Page() {
   );
 
   useEffect(() => {
-    if (!authReady || !userId) return;
+    if (!authReady || (!userId && !guestMode)) return;
     loadQuestions();
-  }, [mode, activePack, selectedRole, loadQuestions, authReady, userId]);
+  }, [mode, activePack, selectedRole, loadQuestions, authReady, userId, guestMode]);
 
   useEffect(() => {
     document.body.classList.toggle('high-contrast', highContrast);
@@ -1070,7 +1081,7 @@ export default function Page() {
   toggleRecordRef.current = toggleRecord;
 
   const saveSessionRemote = async (payload) => {
-    if (!userId) return;
+    if (!userId || guestMode) return;
     try {
       const res = await fetch('/api/save-session', {
         method: 'POST',
@@ -1100,6 +1111,10 @@ export default function Page() {
 
   const commitAnswer = useCallback(async () => {
     if (answerSlots[questionIndex]?.submitted) return;
+    if (guestSubmitLocked) {
+      setGuestLimitModalOpen(true);
+      return;
+    }
 
     const textAnswer = (answer + speechInterim).trim();
     const codeAns = (codeBody || '').trim();
@@ -1134,9 +1149,7 @@ export default function Page() {
       return n;
     });
 
-    if (questionIndex < totalQ - 1) {
-      setQuestionIndex((i) => i + 1);
-    } else if (isCoding) {
+    if (isCoding && questionIndex >= totalQ - 1) {
       showToast('Answer saved.');
     }
 
@@ -1147,6 +1160,15 @@ export default function Page() {
         setAnswerSavedFlash(false);
         answerFlashTimerRef.current = null;
       }, 2000);
+      if (guestMode) {
+        const nextGuestCount = guestCount + 1;
+        setGuestCount(nextGuestCount);
+        localStorage.setItem('guestCount', String(nextGuestCount));
+        if (nextGuestCount >= 3) {
+          setGuestLimitModalOpen(true);
+          setGuestSubmitLocked(true);
+        }
+      }
     }
   }, [
     answer,
@@ -1158,6 +1180,9 @@ export default function Page() {
     totalQ,
     showToast,
     answerSlots,
+    guestMode,
+    guestCount,
+    guestSubmitLocked,
   ]);
 
   const fetchAiFeedback = useCallback(async () => {
@@ -1667,7 +1692,9 @@ export default function Page() {
   const currentSlot = answerSlots[questionIndex] || emptyAnswerSlot();
   const readOnly = !!currentSlot.submitted;
 
-  const userDisplayName = authUser?.email || authUser?.user_metadata?.full_name || 'Signed in';
+  const userDisplayName = guestMode
+    ? 'Guest mode'
+    : authUser?.email || authUser?.user_metadata?.full_name || 'Signed in';
 
   if (!authReady) {
     return (
@@ -1675,10 +1702,6 @@ export default function Page() {
         <p className="auth-loading-msg">Loading…</p>
       </div>
     );
-  }
-
-  if (!userId) {
-    return null;
   }
 
   return (
@@ -1864,9 +1887,19 @@ export default function Page() {
           <div className="sidebar__user-name" title={authUser?.email || ''}>
             {userDisplayName}
           </div>
-          <button type="button" className="sidebar__sign-out" onClick={handleSignOut}>
-            Sign out
-          </button>
+          {guestMode ? (
+            <button
+              type="button"
+              className="sidebar__sign-out"
+              onClick={() => router.push('/auth?tab=signup')}
+            >
+              Sign up free
+            </button>
+          ) : (
+            <button type="button" className="sidebar__sign-out" onClick={handleSignOut}>
+              Sign out
+            </button>
+          )}
           <div className="sidebar-social">
             <a href="https://github.com/Raunack" target="_blank" rel="noopener noreferrer" title="GitHub">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -1897,6 +1930,7 @@ export default function Page() {
             type="button"
             className="toggle-btn"
             aria-pressed={historyVisible}
+            disabled={guestMode}
             onClick={openHistoryPanel}
           >
             <span>History</span>
@@ -1904,6 +1938,11 @@ export default function Page() {
               {historyVisible ? '−' : '+'}
             </span>
           </button>
+          {guestMode ? (
+            <div className="history-row" style={{ color: 'var(--muted)' }}>
+              Sign in to view history and reports.
+            </div>
+          ) : null}
           <div className={`history-panel ${historyVisible ? 'visible' : ''}`}>
             {historyLoading && <div className="history-row">Loading…</div>}
             {historySessionItems.map((h) => (
@@ -1972,6 +2011,11 @@ export default function Page() {
               </span>
             </button>
             <p className="top-title">{isCoding ? 'Coding workspace' : 'Interview workspace'}</p>
+            {guestMode ? (
+              <span className="cam-pill warn" style={{ marginLeft: 12 }}>
+                Guest mode: {Math.max(0, 3 - guestCount)} free submits left
+              </span>
+            ) : null}
           </div>
           <div className="main__top-actions">
             <button
@@ -2062,6 +2106,7 @@ export default function Page() {
                 onClick={() => {
                   setTimerPreset(t.id);
                   try {
+                    localStorage.setItem('timerPref', t.id);
                     localStorage.setItem('timerPreset', t.id);
                   } catch {
                     /* ignore */
@@ -2107,18 +2152,6 @@ export default function Page() {
               Large text
             </button>
           </div>
-        </div>
-
-        <div
-          className="face-look-toast"
-          hidden={
-            !faceLookToast ||
-            (typeof window !== 'undefined' &&
-              (!('FaceDetector' in window) || !window.FaceDetector))
-          }
-          role="status"
-        >
-          ⚠️ Please look at the camera
         </div>
 
         <div className="main__scroll">
@@ -2495,6 +2528,18 @@ export default function Page() {
                         Camera disconnected — reconnecting...
                       </div>
                     </div>
+                    <div
+                      className="face-look-toast"
+                      hidden={
+                        !faceLookToast ||
+                        (typeof window !== 'undefined' &&
+                          (!('FaceDetector' in window) || !window.FaceDetector))
+                      }
+                      role="status"
+                      style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)' }}
+                    >
+                      ⚠️ Please look at the camera
+                    </div>
                     {videoActive && (
                       <div className="video-badges">
                         <span className={`cam-pill ${recording ? 'warn' : ''}`}>
@@ -2728,9 +2773,9 @@ export default function Page() {
             <div className="interview-action-bar__right">
               <button
                 type="button"
-                className="btn btn-ghost"
-                onClick={() => setQuestionIndex((q) => Math.min(q + 1, questions.length - 1))}
-                disabled={questionIndex >= questions.length - 1 || controlsDisabled}
+                className={`btn ${currentSlot?.submitted ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={goNext}
+                disabled={questionIndex >= totalQ - 1 || controlsDisabled}
               >
                 Next →
               </button>
@@ -2738,8 +2783,9 @@ export default function Page() {
                 type="button"
                 className="btn btn-primary"
                 onClick={handleSubmit}
+                disabled={controlsDisabled || readOnly || guestSubmitLocked}
               >
-                Submit
+                {currentSlot?.submitted ? 'Submitted ✓' : 'Submit'}
               </button>
             </div>
           </div>
@@ -2957,11 +3003,8 @@ export default function Page() {
               className="btn btn-ghost"
               onClick={() => {
                 const sid = activeSessionIdRef.current;
-                if (!sid) {
-                  showToast('Save at least one answer with feedback to open the report.', true);
-                  return;
-                }
-                router.push(`/report?session_id=${encodeURIComponent(sid)}`);
+                if (sid) router.push(`/report?session_id=${encodeURIComponent(sid)}`);
+                else showToast('Report will be available after first saved answer.', true);
                 setSessionModalOpen(false);
               }}
             >
@@ -2969,6 +3012,31 @@ export default function Page() {
             </button>
             <button type="button" className="btn btn-primary" onClick={closeReport}>
               Practice Again
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className={`time-up-overlay ${guestLimitModalOpen ? 'open' : ''}`}>
+        <div className="time-up-card">
+          <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>Guest limit reached</h2>
+          <p style={{ margin: '0 0 20px', color: 'var(--muted)', fontSize: 14 }}>
+            You have used 3 free submissions. Sign up to continue with unlimited sessions and reports.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => router.push('/auth?tab=signup')}
+            >
+              Sign up
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setGuestLimitModalOpen(false)}
+            >
+              Maybe later
             </button>
           </div>
         </div>

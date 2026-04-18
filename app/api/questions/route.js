@@ -36,6 +36,34 @@ export async function POST(request) {
   };
 
   const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
+  const topicPools = {
+    technical: [
+      'indexing','caching','load balancing','microservices','REST vs GraphQL','CAP theorem',
+      'SOLID principles','design patterns','CI/CD','Docker','Kubernetes','database sharding',
+      'event-driven architecture','message queues','WebSockets','OAuth','JWT','SQL optimization',
+      'NoSQL tradeoffs','distributed systems','rate limiting','API gateway','memory management',
+      'garbage collection','concurrency','threading','recursion','dynamic programming','system design',
+      'scalability'
+    ],
+    hr: [
+      'conflict resolution','leadership','failure story','team collaboration','time management',
+      'feedback handling','career goals','motivation','work under pressure','difficult colleague',
+      'project ownership','cross-functional work','mentoring','ambiguity handling','initiative',
+      'communication','prioritization','remote work','learning agility','stakeholder management'
+    ],
+    case: [
+      'market sizing','pricing strategy','unit economics','customer segmentation','growth strategy',
+      'retention analysis','churn reduction','go-to-market','competitive analysis','profitability',
+      'cost optimization','channel strategy','product launch','international expansion','ops bottlenecks',
+      'forecasting','risk analysis','supply chain','north star metric','experimentation'
+    ],
+    stress: [
+      'pressure handling','rapid prioritization','defensive criticism','ethical dilemma','scope challenge',
+      'deadline shock','resource constraint','contradictory requirements','stakeholder conflict','self-awareness',
+      'decision under uncertainty','communication under stress','pushback handling','ownership challenge',
+      'unexpected failure','ambiguity pressure','role fit challenge','career gap defense','tradeoff defense','resilience'
+    ],
+  };
 
   // ── Coding round: structured problems ─────────────────────────────
   if (mode === 'coding') {
@@ -116,7 +144,8 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
   let systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
-Make questions varied in difficulty and topic. Avoid repetition.`;
+Make questions varied in difficulty and topic. Avoid repetition.
+Generate completely unique questions. Never repeat common questions like "tell me about yourself" or "what is OOP". Be creative and specific to the role. Each question must be distinct in topic and phrasing.`;
 
   let userPrompt = `Generate 8 ${modeDescriptions[mode] || 'interview'} questions for a ${roleLabel} interview`;
 
@@ -129,6 +158,10 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
   } else {
     userPrompt += '.';
   }
+  const pool = [...(topicPools[mode] || topicPools.technical)];
+  pool.sort(() => Math.random() - 0.5);
+  const pickedTopics = pool.slice(0, 8);
+  userPrompt += `\n\nCover exactly one topic per question from this session topic list (no topic repeats): ${pickedTopics.join(', ')}.`;
 
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -143,7 +176,7 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.85,
+        temperature: 0.95,
         max_tokens: 800,
       }),
     });

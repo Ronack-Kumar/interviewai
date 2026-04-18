@@ -7,6 +7,10 @@ import { useEffect, useState } from 'react';
 export default function AuthPage() {
   const router = useRouter();
   const [tab, setTab] = useState('signin');
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState('');
 
   const [emailIn, setEmailIn] = useState('');
   const [passwordIn, setPasswordIn] = useState('');
@@ -20,6 +24,12 @@ export default function AuthPage() {
   const [signUpLoading, setSignUpLoading] = useState(false);
   const [signUpError, setSignUpError] = useState('');
   const [signUpSuccess, setSignUpSuccess] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const qpTab = new URLSearchParams(window.location.search).get('tab');
+    if (qpTab === 'signup') setTab('signup');
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -98,6 +108,24 @@ export default function AuthPage() {
     }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setForgotMsg('');
+    setForgotLoading(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+        redirectTo: 'https://interviewai-swart.vercel.app/auth/reset',
+      });
+      if (error) throw error;
+      setForgotMsg('Check your email for a reset link');
+    } catch (err) {
+      setForgotMsg(err.message || 'Could not send reset link');
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-card">
@@ -157,6 +185,30 @@ export default function AuthPage() {
                 required
               />
             </label>
+            <button
+              type="button"
+              className="sidebar__sign-out"
+              style={{ alignSelf: 'flex-start', marginTop: -4 }}
+              onClick={() => setShowForgot((s) => !s)}
+            >
+              Forgot password?
+            </button>
+            {showForgot ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <input
+                  className="auth-input"
+                  type="email"
+                  placeholder="Email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                />
+                <button type="button" className="auth-submit" disabled={forgotLoading} onClick={handleForgotPassword}>
+                  {forgotLoading ? 'Sending…' : 'Send reset link'}
+                </button>
+                {forgotMsg ? <p className="auth-success">{forgotMsg}</p> : null}
+              </div>
+            ) : null}
             <button
               type="submit"
               className="auth-submit"
