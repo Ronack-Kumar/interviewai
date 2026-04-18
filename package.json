@@ -1,16 +1,21 @@
 {
-    "name": "mock-interview-app",
-    "version": "1.0.0",
-    "description": "Accessible AI-powered mock interview practice app",
-    "scripts": {
-        "start": "node server.mjs",
-        "dev": "vercel dev",
-        "deploy": "vercel --prod"
-    },
-    "dependencies": {
-        "@supabase/supabase-js": "^2.39.0"
-    },
-    "devDependencies": {
-        "vercel": "^33.0.0"
-    }
+  "name": "mock-interview-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Accessible AI-powered mock interview practice app",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.3",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
+    "next": "^14.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.15.0"
+  }
 }
