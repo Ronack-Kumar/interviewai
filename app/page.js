@@ -376,6 +376,7 @@ export default function Page() {
   const reconnectIntervalRef = useRef(null);
   const cameraEnabledRef = useRef(false);
   const activeSessionIdRef = useRef(null);
+  const lastSessionIdRef = useRef(null);
   const questionStartedAtRef = useRef(Date.now());
   const sessionCompleteShownRef = useRef(false);
   const consecutiveNoFaceRef = useRef(0);
@@ -1105,7 +1106,10 @@ export default function Page() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Save failed');
-      if (data.session_id) activeSessionIdRef.current = data.session_id;
+      if (data.session_id) {
+        activeSessionIdRef.current = data.session_id;
+        lastSessionIdRef.current = data.session_id;
+      }
     } catch (e) {
       showToast(e.message || 'Could not save session', true);
     }
@@ -1712,8 +1716,9 @@ export default function Page() {
       Hard: 'hard',
     }[currentProblem.difficulty] || 'medium');
 
-  const currentSlot = answerSlots[questionIndex] || emptyAnswerSlot();
-  const readOnly = !!currentSlot.submitted;
+  const currentSlot = answerSlots[questionIndex] ?? emptyAnswerSlot();
+  const currentQuestionSubmitted = !!answerSlots[questionIndex]?.submitted;
+  const readOnly = currentQuestionSubmitted;
 
   const userDisplayName = guestMode
     ? 'Guest mode'
@@ -2778,7 +2783,7 @@ export default function Page() {
             </div>
             <span style={{ flex: 1 }} aria-hidden />
             <div className="interview-action-bar__right">
-              {!currentSlot?.submitted && (
+              {!currentQuestionSubmitted && (
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -2788,7 +2793,7 @@ export default function Page() {
                   Submit
                 </button>
               )}
-              {currentSlot?.submitted && (
+              {currentQuestionSubmitted && (
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -2894,7 +2899,7 @@ export default function Page() {
               type="button"
               className="btn btn-primary"
               onClick={() => {
-                const sid = activeSessionIdRef.current;
+                const sid = activeSessionIdRef.current || lastSessionIdRef.current;
                 if (sid) router.push(`/report?session_id=${encodeURIComponent(sid)}`);
                 else showToast('Complete a scored answer to open a saved report.', true);
                 setTimeUpModalOpen(false);
@@ -3013,7 +3018,7 @@ export default function Page() {
               type="button"
               className="btn btn-ghost"
               onClick={() => {
-                const sid = activeSessionIdRef.current;
+                const sid = activeSessionIdRef.current || lastSessionIdRef.current;
                 if (sid) router.push(`/report?session_id=${encodeURIComponent(sid)}`);
                 else showToast('Report will be available after first saved answer.', true);
                 setSessionModalOpen(false);
