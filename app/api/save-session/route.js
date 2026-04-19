@@ -22,7 +22,7 @@ export async function POST(request) {
     ideal_answer: idealAnswer,
   } = body;
 
-  if (!user_id || typeof user_id !== 'string') {
+  if (!user_id || typeof user_id !== 'string' || user_id.trim() === '') {
     return Response.json({ error: 'user_id is required' }, { status: 400 });
   }
 
@@ -35,7 +35,7 @@ export async function POST(request) {
   if (!answer || typeof answer !== 'string' || answer.length > MAX_ANS) {
     return Response.json({ error: 'Invalid answer' }, { status: 400 });
   }
-  if (score !== undefined && score !== null && (typeof score !== 'number' || score < 1 || score > 10)) {
+  if (score !== undefined && score !== null && (typeof score !== 'number' || score < 0 || score > 10)) {
     return Response.json({ error: 'Score must be between 1 and 10' }, { status: 400 });
   }
 

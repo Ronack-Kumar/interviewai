@@ -1082,7 +1082,7 @@ export default function Page() {
   toggleRecordRef.current = toggleRecord;
 
   const saveSessionRemote = async (payload) => {
-    if (!userId || guestMode) return;
+    if (!userId || typeof userId !== 'string' || userId.trim() === '' || guestMode) return;
     try {
       const res = await fetch('/api/save-session', {
         method: 'POST',
