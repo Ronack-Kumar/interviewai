@@ -1361,9 +1361,10 @@ export default function Page() {
     goNext();
   }, [goNext]);
 
-  const handleSubmit = useCallback(() => {
-    commitAnswer();
-  }, [commitAnswer]);
+  const handleSubmit = useCallback(async () => {
+    await commitAnswer();
+    await fetchAiFeedback();
+  }, [commitAnswer, fetchAiFeedback]);
 
   const goPrev = useCallback(() => {
     if (questionIndex > 0) setQuestionIndex((i) => i - 1);
@@ -2644,16 +2645,6 @@ export default function Page() {
                     ✓ Answer saved
                   </p>
 
-                  {readOnly && !currentSlot?.feedback && !feedbackLoading ? (
-                    <button
-                      type="button"
-                      className="get-feedback-link"
-                      onClick={() => fetchAiFeedback()}
-                    >
-                      Get AI Feedback →
-                    </button>
-                  ) : null}
-
                   <div
                     className="feedback-inline-panel"
                     hidden={!(feedbackLoading || feedbackData || feedbackError)}
@@ -2771,22 +2762,27 @@ export default function Page() {
             </div>
             <span style={{ flex: 1 }} aria-hidden />
             <div className="interview-action-bar__right">
-              <button
-                type="button"
-                className={`btn ${currentSlot?.submitted ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={goNext}
-                disabled={questionIndex >= totalQ - 1 || controlsDisabled}
-              >
-                Next →
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSubmit}
-                disabled={controlsDisabled || readOnly || guestSubmitLocked}
-              >
-                {currentSlot?.submitted ? 'Submitted ✓' : 'Submit'}
-              </button>
+              {currentSlot?.submitted ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={goNext}
+                    disabled={questionIndex >= totalQ - 1 || controlsDisabled}
+                  >
+                    {feedbackLoading ? 'Loading feedback...' : 'Next →'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSubmit}
+                  disabled={controlsDisabled || readOnly || guestSubmitLocked}
+                >
+                  Submit
+                </button>
+              )}
             </div>
           </div>
         )}
