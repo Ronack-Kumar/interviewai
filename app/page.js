@@ -3235,6 +3235,7 @@ export default function Page() {
           onClick={() => setMobilePanel((p) => (p === 'mode' ? null : 'mode'))}
         >
           🎯
+          <span className="mobile-bottom-nav__label">Mode</span>
         </button>
         <button
           type="button"
@@ -3243,6 +3244,7 @@ export default function Page() {
           onClick={() => setMobilePanel((p) => (p === 'role' ? null : 'role'))}
         >
           👤
+          <span className="mobile-bottom-nav__label">Role</span>
         </button>
         <button
           type="button"
@@ -3251,6 +3253,7 @@ export default function Page() {
           onClick={() => setMobilePanel((p) => (p === 'stats' ? null : 'stats'))}
         >
           📈
+          <span className="mobile-bottom-nav__label">Stats</span>
         </button>
         <button
           type="button"
@@ -3262,6 +3265,7 @@ export default function Page() {
           }}
         >
           📜
+          <span className="mobile-bottom-nav__label">History</span>
         </button>
         <button
           type="button"
@@ -3273,6 +3277,7 @@ export default function Page() {
           }}
         >
           ⚙
+          <span className="mobile-bottom-nav__label">Settings</span>
         </button>
       </nav>
 

@@ -3349,3 +3349,18 @@ button.history-row--click {
 button.history-row--click:hover {
   background: var(--accent-muted);
 }
+.mobile-bottom-nav__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-bottom-nav__label {
+  display: block;
+  font-size: 10px;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.mobile-bottom-nav__btn.active .mobile-bottom-nav__label {
+  color: var(--accent);
+}
