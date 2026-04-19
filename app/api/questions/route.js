@@ -1,8 +1,8 @@
 // Generates interview questions / coding problems via Groq
 
 export async function POST(request) {
-  console.log('GEMINI KEY exists:', !!process.env.GEMINI_API_KEY);
-  console.log('GEMINI KEY prefix:', process.env.GEMINI_API_KEY?.substring(0, 8));
+  console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
+  console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 8));
   const body = await request.json();
   const { mode, pack, resumeText, role } = body;
 
@@ -10,7 +10,7 @@ export async function POST(request) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GROQ_API_KEY;
   if (!geminiKey) {
     return Response.json({ error: 'API key not configured' }, { status: 500 });
   }
@@ -91,14 +91,14 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     }
 
     try {
-      const groqRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${geminiKey}`, {
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${geminiKey}`,
         },
         body: JSON.stringify({
-          model: 'gemini-2.0-flash',
+          model: 'llama-3.3-70b-versatile',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -125,8 +125,8 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
 
       return Response.json({ problems: parsed.slice(0, 8) }, { status: 200 });
     } catch (err) {
-      console.log('GEMINI KEY exists:', !!process.env.GEMINI_API_KEY);
-      console.log('GEMINI KEY prefix:', process.env.GEMINI_API_KEY?.substring(0, 10));
+      console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
+      console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 10));
       console.log('Questions API full error:', {
         name: err?.name,
         message: err?.message,
@@ -159,14 +159,14 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
   }
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
   try {
-    const groqRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${geminiKey}`, {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${geminiKey}`,
       },
       body: JSON.stringify({
-        model: 'gemini-2.0-flash',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -193,8 +193,8 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
 
     return Response.json({ questions: parsed }, { status: 200 });
   } catch (err) {
-    console.log('GEMINI KEY exists:', !!process.env.GEMINI_API_KEY);
-    console.log('GEMINI KEY prefix:', process.env.GEMINI_API_KEY?.substring(0, 10));
+    console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
+    console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 10));
     console.log('Questions API full error:', {
       name: err?.name,
       message: err?.message,
