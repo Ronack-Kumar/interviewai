@@ -2222,12 +2222,14 @@ body.large-text .answer-area {
 .coding-lc-panels {
   display: flex;
   flex: 1;
+  height: 100%;
   min-height: 0;
   border-bottom: 1px solid var(--border);
 }
 
 .coding-lc-left {
   width: 45%;
+  height: 100%;
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -2297,6 +2299,9 @@ body.large-text .answer-area {
 }
 
 .coding-bottom-strip {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   background: var(--bg);
