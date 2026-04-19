@@ -2778,18 +2778,7 @@ export default function Page() {
             </div>
             <span style={{ flex: 1 }} aria-hidden />
             <div className="interview-action-bar__right">
-              {currentSlot?.submitted ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={goNext}
-                    disabled={questionIndex >= totalQ - 1 || controlsDisabled}
-                  >
-                    {feedbackLoading ? 'Getting feedback...' : 'Next →'}
-                  </button>
-                </>
-              ) : (
+              {!currentSlot?.submitted && (
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -2797,6 +2786,16 @@ export default function Page() {
                   disabled={controlsDisabled || readOnly || guestSubmitLocked}
                 >
                   Submit
+                </button>
+              )}
+              {currentSlot?.submitted && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={goNext}
+                  disabled={questionIndex >= totalQ - 1 || controlsDisabled}
+                >
+                  {feedbackLoading ? 'Getting feedback...' : 'Next →'}
                 </button>
               )}
             </div>
