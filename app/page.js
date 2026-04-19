@@ -1344,8 +1344,8 @@ export default function Page() {
     }
     runCodingOutputCases(true);
     await new Promise((r) => requestAnimationFrame(() => r()));
-    await fetchAiFeedback();
     await commitAnswer();
+    await fetchAiFeedback();
   }, [
     runCodingOutputCases,
     codingProblems,
