@@ -3364,3 +3364,107 @@ button.history-row--click:hover {
 .mobile-bottom-nav__btn.active .mobile-bottom-nav__label {
   color: var(--accent);
 }
+@media (max-width: 768px) {
+  .main__top {
+    padding: 12px 14px 10px;
+  }
+
+  .main__top-actions > button[aria-label='Send feedback'],
+  .main__top-actions > .settings-btn {
+    display: none;
+  }
+
+  .main__top-left .cam-pill.warn {
+    margin-left: 8px !important;
+    max-width: 100%;
+    padding: 3px 8px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .main,
+  .main__scroll,
+  .interview-layout,
+  .interview-layout__right,
+  .interview-layout__right-inner,
+  .interview-layout__scroll,
+  .interview-layout__q-block,
+  .interview-layout__answer-block,
+  .q-block,
+  .answer-wrap {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .interview-layout {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .interview-layout__left {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .interview-layout__media,
+  .media-row {
+    min-height: 0;
+  }
+
+  .video-wrap {
+    height: 200px;
+    max-height: 200px;
+    min-height: 200px;
+    flex: 0 0 auto;
+  }
+
+  .interview-layout__right {
+    width: 100%;
+    height: auto;
+    padding: 1rem 1rem 88px;
+    overflow-y: visible;
+  }
+
+  .question-body {
+    font-size: 18px;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  .answer-area {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .interview-action-bar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .interview-action-bar__left,
+  .interview-action-bar__right {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .interview-action-bar__left {
+    justify-content: space-between;
+  }
+
+  .interview-action-bar__right {
+    justify-content: stretch;
+  }
+
+  .interview-action-bar__right .btn {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
