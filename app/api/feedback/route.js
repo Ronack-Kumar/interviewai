@@ -47,8 +47,8 @@ export async function POST(request) {
     return Response.json({ error: `Answer too long — maximum ${MAX_ANSWER} characters` }, { status: 400 });
   }
 
-  const groqKey = process.env.GEMINI_API_KEY;
-  if (!groqKey) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
     return Response.json({ error: 'API key not configured' }, { status: 500 });
   }
 
@@ -64,11 +64,11 @@ Candidate answer / code:
 ${answer}`;
 
   try {
-    const groqRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+    const groqRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${geminiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${groqKey}`,
+        Authorization: `Bearer ${geminiKey}`,
       },
       body: JSON.stringify({
         model: 'gemini-2.0-flash',
