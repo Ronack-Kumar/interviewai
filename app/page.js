@@ -1082,6 +1082,7 @@ export default function Page() {
   toggleRecordRef.current = toggleRecord;
 
   const saveSessionRemote = async (payload) => {
+    console.log('[MockPrep] saveSessionRemote called, userId:', userId, 'guestMode:', guestMode);
     if (!userId || typeof userId !== 'string' || userId.trim() === '' || guestMode) return;
     try {
       const res = await fetch('/api/save-session', {
