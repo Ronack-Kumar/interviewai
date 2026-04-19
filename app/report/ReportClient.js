@@ -217,7 +217,7 @@ export default function ReportClient() {
       : null;
   const grade =
     avgScore == null
-      ? 'â€”'
+      ? '—'
       : avgScore >= 8
         ? 'A'
         : avgScore >= 6
@@ -244,7 +244,7 @@ export default function ReportClient() {
     return (
       <div className="report-page">
         <div className="report-page-inner">
-          <p>Loading reportâ€¦</p>
+          <p>Loading report…</p>
         </div>
       </div>
     );
@@ -273,7 +273,7 @@ export default function ReportClient() {
   try {
     radarChartContent = allScoresNull ? (
       <div style={{ color: 'var(--muted)', textAlign: 'center', padding: 40 }}>
-        <p>No scores yet â€” AI feedback pending</p>
+        <p>No scores yet — AI feedback pending</p>
       </div>
     ) : radarData.length > 0 ? (
       <ResponsiveContainer width="100%" height={280}>
@@ -304,7 +304,7 @@ export default function ReportClient() {
   try {
     barChartContent = allScoresNull ? (
       <div style={{ color: 'var(--muted)', textAlign: 'center', padding: 40 }}>
-        <p>No scores yet â€” AI feedback pending</p>
+        <p>No scores yet — AI feedback pending</p>
       </div>
     ) : barData.length > 0 ? (
       <ResponsiveContainer width="100%" height={280}>
@@ -348,7 +348,7 @@ export default function ReportClient() {
                 {pdfBusy ? (
                   <>
                     <span className="report-pdf-spinner" />
-                    Generatingâ€¦
+                    Generating…
                   </>
                 ) : (
                   'Download PDF'
@@ -363,7 +363,7 @@ export default function ReportClient() {
           {safeAnswers.length > 0 ? (
             <div style={{ marginBottom: 20 }}>
               <button type="button" className="btn btn-primary" onClick={handleGetAllFeedback} disabled={feedbackBusy}>
-                {feedbackBusy ? 'Getting AI Feedbackâ€¦' : 'Get AI Feedback for All Questions'}
+                {feedbackBusy ? 'Getting AI Feedback…' : 'Get AI Feedback for All Questions'}
               </button>
               {feedbackErr ? (
                 <p style={{ color: 'var(--muted)', marginTop: 10, fontSize: 13 }}>{feedbackErr}</p>
@@ -391,7 +391,7 @@ export default function ReportClient() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 42, fontWeight: 600 }}>
-                  {avgScore != null ? avgScore.toFixed(1) : 'â€”'}
+                  {avgScore != null ? avgScore.toFixed(1) : '—'}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>Overall /10</div>
               </div>
@@ -466,7 +466,7 @@ export default function ReportClient() {
                   <li key={a?.id || i} style={{ marginBottom: 8 }}>
                     <strong style={{ color: 'var(--text-primary)' }}>
                       {(a?.question || '').substring(0, 80)}
-                      {(a?.question || '').length > 80 ? 'â€¦' : ''}
+                      {(a?.question || '').length > 80 ? '…' : ''}
                     </strong>{' '}
                     ({a?.score}/10)
                   </li>
@@ -510,7 +510,7 @@ function QuestionBlock({ index, row }) {
       }}
     >
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, lineHeight: 1.4 }}>
-        {q.length > 160 ? `${q.substring(0, 160)}â€¦` : q}
+        {q.length > 160 ? `${q.substring(0, 160)}…` : q}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{sc}/10</span>
@@ -531,7 +531,7 @@ function QuestionBlock({ index, row }) {
         style={{ fontSize: 12, padding: '6px 10px' }}
         onClick={() => setOpenFb((x) => !x)}
       >
-        {openFb ? 'â–¼' : 'â–¶'} Feedback
+        {openFb ? '▼' : '▶'} Feedback
       </button>
       {openFb ? (
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
@@ -546,7 +546,7 @@ function QuestionBlock({ index, row }) {
             style={{ fontSize: 12, padding: '6px 10px', marginLeft: 8 }}
             onClick={() => setOpenIdeal((x) => !x)}
           >
-            {openIdeal ? 'â–¼' : 'â–¶'} Ideal answer
+            {openIdeal ? '▼' : '▶'} Ideal answer
           </button>
           {openIdeal ? (
             <p style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
