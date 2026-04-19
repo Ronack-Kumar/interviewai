@@ -107,6 +107,7 @@ export async function POST(request) {
 
     const answerPayload = {
       session_id: sessionId,
+      user_id,
       question,
       answer,
       score,
