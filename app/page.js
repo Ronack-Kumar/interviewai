@@ -614,6 +614,8 @@ export default function Page() {
         setUserId('');
       } else {
         setGuestMode(false);
+        localStorage.removeItem('guestCount');
+        localStorage.removeItem('guestSubmitLocked');
         setUserId(user.id);
         setAuthUser(user);
       }
