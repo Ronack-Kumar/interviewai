@@ -169,35 +169,37 @@ export default function ReportClient() {
       }
 
       for (const answerRow of safeAnswers) {
-        const res = await fetch('/api/feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: answerRow?.question || '',
-            answer: answerRow?.answer || '',
-            mode: session.mode,
-          }),
-        });
-        const parsed = await res.json();
-        if (!res.ok || parsed.error) {
-          throw new Error(parsed.error || 'Failed to get feedback');
-        }
+        try {
+          const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: answerRow?.question || '',
+              answer: answerRow?.answer || '',
+              mode: session.mode,
+            }),
+          });
+          const parsed = await res.json();
+          if (!res.ok || parsed.error) continue;
 
-        if (answerRow?.id) {
-          const { error: updateError } = await supabase
-            .from('answers')
-            .update({
-              score: parsed.score ?? null,
-              accuracy: parsed.accuracy ?? null,
-              clarity: parsed.clarity ?? null,
-              depth: parsed.depth ?? null,
-              feedback: parsed.feedback ?? null,
-              ideal_answer: parsed.idealAnswer ?? '',
-            })
-            .eq('id', answerRow.id)
-            .eq('user_id', user.id)
-            .eq('session_id', sessionId);
-          if (updateError) throw updateError;
+          if (answerRow?.id) {
+            const { error: updateError } = await supabase
+              .from('answers')
+              .update({
+                score: parsed.score ?? null,
+                accuracy: parsed.accuracy ?? null,
+                clarity: parsed.clarity ?? null,
+                depth: parsed.depth ?? null,
+                feedback: parsed.feedback ?? null,
+                ideal_answer: parsed.idealAnswer ?? '',
+              })
+              .eq('id', answerRow.id)
+              .eq('user_id', user.id)
+              .eq('session_id', sessionId);
+            if (updateError) continue;
+          }
+        } catch {
+          continue;
         }
       }
 

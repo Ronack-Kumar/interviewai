@@ -1389,7 +1389,7 @@ export default function Page() {
 
   const handleSubmit = useCallback(async () => {
     await commitAnswer();
-    setTimeout(() => goNext(), 300);
+    goNext();
   }, [commitAnswer, goNext]);
 
   const goPrev = useCallback(() => {
