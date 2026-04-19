@@ -84,7 +84,6 @@ function normTestOut(s) {
   if (s == null) return '';
   return String(s).replace(/\s/g, '');
 }
-
 /** Parse inputs like "[2,7,11,15], 9" for in-browser Run (JavaScript only). */
 function parseTwoSumStyleInput(inputStr) {
   const m = String(inputStr).match(/\[([\d,\s-]+)\]\s*,\s*(-?\d+)/);
@@ -1202,7 +1201,9 @@ export default function Page() {
         return;
       }
     } else {
-      if (!s?.submitted) return;
+      if (!s?.submitted) {
+        textAnswer = (answer + speechInterim).trim();
+      }
       if (!textAnswer) {
         showToast('No answer to analyse', true);
         return;
@@ -1297,6 +1298,8 @@ export default function Page() {
     answerSlots,
     questionIndex,
     isCoding,
+    answer,
+    speechInterim,
     currentTextQuestion,
     currentProblem,
     mode,
@@ -2772,7 +2775,7 @@ export default function Page() {
                     onClick={goNext}
                     disabled={questionIndex >= totalQ - 1 || controlsDisabled}
                   >
-                    {feedbackLoading ? 'Loading feedback...' : 'Next →'}
+                    {feedbackLoading ? 'Getting feedback...' : 'Next →'}
                   </button>
                 </>
               ) : (
@@ -3289,3 +3292,4 @@ export default function Page() {
     </div>
   );
 }
+
