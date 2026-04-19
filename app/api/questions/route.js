@@ -109,12 +109,13 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
       });
 
       const data = await groqRes.json();
-      if (!data.choices || !data.choices[0]) {
-        console.log('Groq API response (coding, no choices):', JSON.stringify(data));
+      console.log('Gemini raw response:', JSON.stringify(data).slice(0, 500));
+      const text = data?.choices?.[0]?.message?.content 
+        || data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        console.log('Gemini no text found, raw:', JSON.stringify(data).slice(0, 300));
         throw new Error('Invalid response from LLM');
       }
-
-      const text = data.choices[0].message.content;
       const clean = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
 
@@ -176,13 +177,13 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
     });
 
     const data = await groqRes.json();
-
-    if (!data.choices || !data.choices[0]) {
-      console.log('Groq API response (standard, no choices):', JSON.stringify(data));
+    console.log('Gemini raw response:', JSON.stringify(data).slice(0, 500));
+    const text = data?.choices?.[0]?.message?.content 
+      || data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      console.log('Gemini no text found, raw:', JSON.stringify(data).slice(0, 300));
       throw new Error('Invalid response from LLM');
     }
-
-    const text = data.choices[0].message.content;
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
