@@ -64,8 +64,8 @@ export async function POST(request) {
 
   try {
     let sessionId =
-      typeof incomingSessionId === 'string' && incomingSessionId.trim()
-        ? incomingSessionId.trim()
+      incomingSessionId !== null && incomingSessionId !== undefined && incomingSessionId !== ''
+        ? String(incomingSessionId).trim()
         : null;
 
     if (sessionId) {
