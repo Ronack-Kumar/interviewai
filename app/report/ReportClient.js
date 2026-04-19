@@ -141,9 +141,10 @@ export default function ReportClient() {
     }
   }, [session]);
 
+  const safeAnswers = Array.isArray(answers) ? answers : [];
   const avgScore =
-    answers.length > 0
-      ? answers.reduce((s, a) => s + (typeof a.score === 'number' ? a.score : 0), 0) / answers.length
+    safeAnswers.length > 0
+      ? safeAnswers.reduce((s, a) => s + (typeof a?.score === 'number' ? a.score : 0), 0) / safeAnswers.length
       : null;
   const grade =
     avgScore == null
@@ -156,16 +157,19 @@ export default function ReportClient() {
             ? 'C'
             : 'D';
 
-  const totalSecs = answers.reduce(
-    (s, a) => s + (typeof a.time_taken_seconds === 'number' ? a.time_taken_seconds : 0),
+  const totalSecs = safeAnswers.reduce(
+    (s, a) => s + (typeof a?.time_taken_seconds === 'number' ? a.time_taken_seconds : 0),
     0
   );
-  const radarData = computeRadarRows(answers);
-  const barData = answers.map((a, i) => ({
-    name: `Q${i + 1}`,
-    score: typeof a.score === 'number' ? a.score : 0,
-  }));
-  const weak = answers.filter((a) => (a.score || 0) < 4);
+  const radarData = safeAnswers.length > 0 ? computeRadarRows(safeAnswers) : [];
+  const barData =
+    safeAnswers.length > 0
+      ? safeAnswers.map((a, i) => ({
+          name: `Q${i + 1}`,
+          score: typeof a?.score === 'number' ? a.score : 0,
+        }))
+      : [];
+  const weak = safeAnswers.length > 0 ? safeAnswers.filter((a) => ((a?.score || 0) < 4)) : [];
 
   if (loading) {
     return (
@@ -222,7 +226,7 @@ export default function ReportClient() {
         </div>
 
         <p style={{ color: 'var(--muted)', marginBottom: 24, fontSize: 14 }}>
-          {modeLabel} | {created} | {answers.length} answers | {Math.floor(totalSecs / 60)}m {totalSecs % 60}s total
+          {modeLabel} | {created} | {safeAnswers.length} answers | {Math.floor(totalSecs / 60)}m {totalSecs % 60}s total
         </p>
 
         <section
@@ -244,7 +248,7 @@ export default function ReportClient() {
             </div>
             <div className="grade-badge">{grade}</div>
             <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-              Questions: {answers.length}
+              Questions: {safeAnswers.length}
               <br />
               Total time (tracked): {Math.floor(totalSecs / 60)}m {totalSecs % 60}s
             </div>
@@ -269,21 +273,25 @@ export default function ReportClient() {
             }}
           >
             <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Performance radar</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
-                <PolarGrid stroke="var(--border)" />
-                <PolarAngleAxis dataKey="metric" tick={{ fill: 'var(--muted)', fontSize: 11 }} />
-                <Radar
-                  name="Score"
-                  dataKey="value"
-                  stroke="#4f8ef7"
-                  fill="#4f8ef7"
-                  fillOpacity={0.35}
-                />
-                <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
-                <YAxis domain={[0, 10]} hide />
-              </RadarChart>
-            </ResponsiveContainer>
+            {radarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
+                  <PolarGrid stroke="var(--border)" />
+                  <PolarAngleAxis dataKey="metric" tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                  <Radar
+                    name="Score"
+                    dataKey="value"
+                    stroke="#4f8ef7"
+                    fill="#4f8ef7"
+                    fillOpacity={0.35}
+                  />
+                  <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
+                  <YAxis domain={[0, 10]} hide />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data available</p>
+            )}
           </div>
           <div
             style={{
@@ -295,33 +303,39 @@ export default function ReportClient() {
             }}
           >
             <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Score timeline</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="name" tick={{ fill: 'var(--muted)', fontSize: 11 }} />
-                <YAxis domain={[0, 10]} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
-                <Bar dataKey="score" radius={[2, 2, 0, 0]}>
-                  {barData.map((e, i) => (
-                    <Cell key={i} fill={barColor(e.score)} />
-                  ))}
-                </Bar>
-                <Bar
-                  dataKey="score"
-                  fillOpacity={0}
-                  label={{ position: 'top', fill: 'var(--text-secondary)', fontSize: 11 }}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {barData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                  <YAxis domain={[0, 10]} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
+                  <Bar dataKey="score" radius={[2, 2, 0, 0]}>
+                    {barData.map((e, i) => (
+                      <Cell key={i} fill={barColor(e.score)} />
+                    ))}
+                  </Bar>
+                  <Bar
+                    dataKey="score"
+                    fillOpacity={0}
+                    label={{ position: 'top', fill: 'var(--text-secondary)', fontSize: 11 }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data available</p>
+            )}
           </div>
         </section>
 
         <section style={{ marginBottom: 20 }}>
           <h2 style={{ fontSize: 16, marginBottom: 12 }}>Per question</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {answers.map((a, i) => (
-              <QuestionBlock key={a.id || i} index={i} row={a} />
-            ))}
+            {safeAnswers.length > 0 ? (
+              safeAnswers.map((a, i) => <QuestionBlock key={a?.id || i} index={i} row={a} />)
+            ) : (
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data available</p>
+            )}
           </div>
         </section>
 
@@ -361,8 +375,9 @@ export default function ReportClient() {
 function QuestionBlock({ index, row }) {
   const [openFb, setOpenFb] = useState(false);
   const [openIdeal, setOpenIdeal] = useState(false);
-  const sc = typeof row.score === 'number' ? row.score : 0;
-  const q = row.question || `Question ${index + 1}`;
+  const safeRow = row ?? {};
+  const sc = typeof safeRow.score === 'number' ? safeRow.score : 0;
+  const q = safeRow.question || `Question ${index + 1}`;
   return (
     <div
       style={{
@@ -397,9 +412,9 @@ function QuestionBlock({ index, row }) {
         {openFb ? '▼' : '▶'} Feedback
       </button>
       {openFb ? (
-        <p style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{row.feedback}</p>
+        <p style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{safeRow.feedback || 'No data available'}</p>
       ) : null}
-      {(row.ideal_answer || '').length > 0 ? (
+      {(safeRow.ideal_answer || '').length > 0 ? (
         <>
           <button
             type="button"
@@ -411,7 +426,7 @@ function QuestionBlock({ index, row }) {
           </button>
           {openIdeal ? (
             <p style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>
-              {row.ideal_answer}
+              {safeRow.ideal_answer}
             </p>
           ) : null}
         </>

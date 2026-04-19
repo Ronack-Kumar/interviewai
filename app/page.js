@@ -1346,13 +1346,12 @@ export default function Page() {
     runCodingOutputCases(true);
     await new Promise((r) => requestAnimationFrame(() => r()));
     await commitAnswer();
-    await fetchAiFeedback();
+    setTimeout(() => goNextRef.current?.(), 300);
   }, [
     runCodingOutputCases,
     codingProblems,
     questionIndex,
     commitAnswer,
-    fetchAiFeedback,
     codeBody,
     showToast,
   ]);
@@ -1369,8 +1368,8 @@ export default function Page() {
 
   const handleSubmit = useCallback(async () => {
     await commitAnswer();
-    await fetchAiFeedback();
-  }, [commitAnswer, fetchAiFeedback]);
+    setTimeout(() => goNext(), 300);
+  }, [commitAnswer, goNext]);
 
   const goPrev = useCallback(() => {
     if (questionIndex > 0) setQuestionIndex((i) => i - 1);
@@ -2293,16 +2292,8 @@ export default function Page() {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      onClick={
-                        readOnly && !currentSlot?.feedback
-                          ? fetchAiFeedback
-                          : handleCodingSubmitAllClick
-                      }
-                      disabled={
-                        controlsDisabled ||
-                        (!readOnly && !currentProblem) ||
-                        (readOnly && (currentSlot?.feedback || feedbackLoading))
-                      }
+                      onClick={handleCodingSubmitAllClick}
+                      disabled={controlsDisabled || !currentProblem || readOnly}
                     >
                       Submit ✓
                     </button>
@@ -2322,7 +2313,7 @@ export default function Page() {
                         <span style={{ color: 'var(--muted)', flex: 1 }}>{row.detail}</span>
                       </div>
                     ))}
-                    {(feedbackLoading || feedbackData || feedbackError) && (
+                    {false && (feedbackLoading || feedbackData || feedbackError) && (
                       <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
                         <div className="feedback-head" style={{ marginBottom: 8 }}>
                           AI feedback
@@ -2651,7 +2642,8 @@ export default function Page() {
                     ✓ Answer saved
                   </p>
 
-                  <div
+                  {false && (
+                    <div
                     className="feedback-inline-panel"
                     hidden={!(feedbackLoading || feedbackData || feedbackError)}
                   >
@@ -2686,7 +2678,8 @@ export default function Page() {
                         </div>
                       </>
                     )}
-                  </div>
+                    </div>
+                  )}
 
                   <div className="answer-wrap answer-wrap--stretch">
                     <textarea
