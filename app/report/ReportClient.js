@@ -29,7 +29,7 @@ function barColor(score) {
 function computeRadarRows(answers) {
   const n = answers.length || 1;
   const avg = (key) =>
-    answers.reduce((s, a) => s + (typeof a[key] === 'number' ? a[key] : 0), 0) / n;
+    answers.reduce((s, a) => s + (typeof a?.[key] === 'number' ? a[key] : 0), 0) / n;
   const acc = avg('accuracy');
   const clar = avg('clarity');
   const dep = avg('depth');
@@ -66,7 +66,12 @@ export default function ReportClient() {
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackErr, setFeedbackErr] = useState('');
   const reportRef = useRef(null);
+  const safeAnswers = Array.isArray(answers) ? answers : [];
+  const allScoresNull =
+    safeAnswers.length > 0 && safeAnswers.every((a) => a?.score === null || a?.score === undefined);
 
   useEffect(() => {
     const supabase = createClient();
@@ -141,7 +146,73 @@ export default function ReportClient() {
     }
   }, [session]);
 
-  const safeAnswers = Array.isArray(answers) ? answers : [];
+  const handleGetAllFeedback = useCallback(async () => {
+    if (!session || !sessionId) return;
+    setFeedbackBusy(true);
+    setFeedbackErr('');
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace('/auth');
+        return;
+      }
+
+      const nextAnswers = await Promise.all(
+        safeAnswers.map(async (answerRow) => {
+          const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: answerRow?.question || '',
+              answer: answerRow?.answer || '',
+              mode: session.mode,
+            }),
+          });
+          const parsed = await res.json();
+          if (!res.ok || parsed.error) {
+            throw new Error(parsed.error || 'Failed to get feedback');
+          }
+
+          if (answerRow?.id) {
+            const { error: updateError } = await supabase
+              .from('answers')
+              .update({
+                score: parsed.score ?? null,
+                accuracy: parsed.accuracy ?? null,
+                clarity: parsed.clarity ?? null,
+                depth: parsed.depth ?? null,
+                feedback: parsed.feedback ?? null,
+                ideal_answer: parsed.idealAnswer ?? '',
+              })
+              .eq('id', answerRow.id)
+              .eq('user_id', user.id)
+              .eq('session_id', sessionId);
+            if (updateError) throw updateError;
+          }
+
+          return {
+            ...answerRow,
+            score: parsed.score ?? null,
+            accuracy: parsed.accuracy ?? null,
+            clarity: parsed.clarity ?? null,
+            depth: parsed.depth ?? null,
+            feedback: parsed.feedback ?? null,
+            ideal_answer: parsed.idealAnswer ?? '',
+          };
+        })
+      );
+
+      setAnswers(nextAnswers);
+    } catch (e) {
+      setFeedbackErr(e.message || 'Failed to get AI feedback');
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }, [router, safeAnswers, session, sessionId]);
+
   const avgScore =
     safeAnswers.length > 0
       ? safeAnswers.reduce((s, a) => s + (typeof a?.score === 'number' ? a.score : 0), 0) / safeAnswers.length
@@ -166,7 +237,7 @@ export default function ReportClient() {
     safeAnswers.length > 0
       ? safeAnswers.map((a, i) => ({
           name: `Q${i + 1}`,
-          score: typeof a?.score === 'number' ? a.score : 0,
+          score: a?.score == null ? 0 : a.score,
         }))
       : [];
   const weak = safeAnswers.length > 0 ? safeAnswers.filter((a) => ((a?.score || 0) < 4)) : [];
@@ -273,7 +344,15 @@ export default function ReportClient() {
             }}
           >
             <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Performance radar</h3>
-            {radarData.length > 0 ? (
+            {allScoresNull ? (
+              <div style={{ color: 'var(--muted)', textAlign: 'center', padding: 40 }}>
+                <p>No scores yet — AI feedback pending</p>
+                <button className="btn btn-primary" onClick={handleGetAllFeedback} disabled={feedbackBusy}>
+                  {feedbackBusy ? 'Getting AI Feedback…' : 'Get AI Feedback for All Questions'}
+                </button>
+                {feedbackErr ? <p style={{ marginTop: 12 }}>{feedbackErr}</p> : null}
+              </div>
+            ) : radarData.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
                 <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
                   <PolarGrid stroke="var(--border)" />
@@ -303,7 +382,15 @@ export default function ReportClient() {
             }}
           >
             <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Score timeline</h3>
-            {barData.length > 0 ? (
+            {allScoresNull ? (
+              <div style={{ color: 'var(--muted)', textAlign: 'center', padding: 40 }}>
+                <p>No scores yet — AI feedback pending</p>
+                <button className="btn btn-primary" onClick={handleGetAllFeedback} disabled={feedbackBusy}>
+                  {feedbackBusy ? 'Getting AI Feedback…' : 'Get AI Feedback for All Questions'}
+                </button>
+                {feedbackErr ? <p style={{ marginTop: 12 }}>{feedbackErr}</p> : null}
+              </div>
+            ) : barData.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={barData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
