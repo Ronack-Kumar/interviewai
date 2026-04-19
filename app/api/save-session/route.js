@@ -35,8 +35,9 @@ export async function POST(request) {
   if (!answer || typeof answer !== 'string' || answer.length > MAX_ANS) {
     return Response.json({ error: 'Invalid answer' }, { status: 400 });
   }
-  if (score !== undefined && score !== null && (typeof score !== 'number' || score < 0 || score > 10)) {
-    return Response.json({ error: 'Score must be between 1 and 10' }, { status: 400 });
+  const normalizedScore = (score === 0 || score === null || score === undefined) ? null : score;
+  if (normalizedScore !== null && (typeof normalizedScore !== 'number' || normalizedScore < 0 || normalizedScore > 10)) {
+    return Response.json({ error: 'Score must be between 0 and 10' }, { status: 400 });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -110,7 +111,7 @@ export async function POST(request) {
       user_id,
       question,
       answer,
-      score,
+      score: normalizedScore,
       accuracy: accuracy ?? null,
       clarity: clarity ?? null,
       depth: depth ?? null,
