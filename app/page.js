@@ -1150,6 +1150,19 @@ export default function Page() {
       };
       return n;
     });
+    await saveSessionRemote({
+      mode,
+      question: isCoding ? (currentProblem?.title || 'Coding Problem') : currentTextQuestion,
+      answer: isCoding ? codeBody : textAnswer,
+      score: null,
+      accuracy: null,
+      clarity: null,
+      depth: null,
+      feedback: null,
+      session_id: activeSessionIdRef.current,
+      time_taken_seconds: Math.max(0, Math.floor((Date.now() - questionStartedAtRef.current) / 1000)),
+      ideal_answer: '',
+    });
 
     if (isCoding && questionIndex >= totalQ - 1) {
       showToast('Answer saved.');
@@ -1182,6 +1195,10 @@ export default function Page() {
     totalQ,
     showToast,
     answerSlots,
+    mode,
+    currentProblem,
+    currentTextQuestion,
+    saveSessionRemote,
     guestMode,
     guestCount,
     guestSubmitLocked,
