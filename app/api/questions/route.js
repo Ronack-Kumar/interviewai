@@ -10,7 +10,7 @@ export async function POST(request) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
   }
 
-  const groqKey = process.env.GROQ_API_KEY;
+  const groqKey = process.env.GEMINI_API_KEY;
   if (!groqKey) {
     return Response.json({ error: 'API key not configured' }, { status: 500 });
   }
@@ -91,14 +91,14 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     }
 
     try {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const groqRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'gemini-2.0-flash',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -158,14 +158,14 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
   }
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
   try {
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const groqRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${groqKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'gemini-2.0-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -204,4 +204,3 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
     return Response.json({ error: 'Failed to generate questions', detail: err.message }, { status: 500 });
   }
 }
-

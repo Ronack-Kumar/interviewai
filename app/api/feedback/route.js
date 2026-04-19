@@ -47,7 +47,7 @@ export async function POST(request) {
     return Response.json({ error: `Answer too long — maximum ${MAX_ANSWER} characters` }, { status: 400 });
   }
 
-  const groqKey = process.env.GROQ_API_KEY;
+  const groqKey = process.env.GEMINI_API_KEY;
   if (!groqKey) {
     return Response.json({ error: 'API key not configured' }, { status: 500 });
   }
@@ -64,14 +64,14 @@ Candidate answer / code:
 ${answer}`;
 
   try {
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const groqRes = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${groqKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'gemini-2.0-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
