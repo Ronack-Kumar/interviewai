@@ -61,6 +61,10 @@ export default function AuthPage() {
         setSignInError(error.message);
         return;
       }
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('guestCount');
+        localStorage.removeItem('guestSubmitLocked');
+      }
       router.replace('/');
       router.refresh();
     } finally {
@@ -100,6 +104,10 @@ export default function AuthPage() {
         "Check your email — we've sent you a confirmation link"
       );
       setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('guestCount');
+          localStorage.removeItem('guestSubmitLocked');
+        }
         router.replace('/');
         router.refresh();
       }, 900);

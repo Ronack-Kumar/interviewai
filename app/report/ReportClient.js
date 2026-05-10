@@ -21,9 +21,9 @@ import {
 import { createClient } from '../../lib/supabase';
 
 function barColor(score) {
-  if (score >= 8) return '#22c55e';
-  if (score >= 5) return '#f59e0b';
-  return '#ef4444';
+  if (score >= 8) return 'var(--success)';
+  if (score >= 5) return 'var(--warning)';
+  return 'var(--error)';
 }
 
 function computeRadarRows(answers) {
@@ -283,8 +283,8 @@ export default function ReportClient() {
           <Radar
             name="Score"
             dataKey="value"
-            stroke="#4f8ef7"
-            fill="#4f8ef7"
+            stroke="var(--accent)"
+            fill="var(--accent)"
             fillOpacity={0.35}
           />
           <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />

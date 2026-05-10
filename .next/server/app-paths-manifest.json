@@ -1,4 +1,6 @@
 {
+  "/api/save-session/route": "app/api/save-session/route.js",
+  "/api/questions/route": "app/api/questions/route.js",
   "/page": "app/page.js",
-  "/auth/page": "app/auth/page.js"
+  "/report/page": "app/report/page.js"
 }

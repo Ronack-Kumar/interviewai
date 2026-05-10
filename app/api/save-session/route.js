@@ -122,33 +122,63 @@ export async function POST(request) {
     if (tts != null) answerPayload.time_taken_seconds = tts;
     if (ideal != null) answerPayload.ideal_answer = ideal;
 
-    const answerRes = await fetch(`${supabaseUrl}/rest/v1/answers`, {
-      method: 'POST',
-      headers: {
-        ...baseHeaders,
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(answerPayload),
-    });
+    const existingRes = await fetch(`${supabaseUrl}/rest/v1/answers?session_id=eq.${sessionId}&question=eq.${encodeURIComponent(question)}&select=id`, { headers: baseHeaders });
+    let existingId = null;
+    if (existingRes.ok) {
+      const existing = await existingRes.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        existingId = existing[0].id;
+      }
+    }
 
-    if (!answerRes.ok) {
-      const errText = await answerRes.text();
-      const lower = errText.toLowerCase();
-      if (lower.includes('time_taken') || lower.includes('ideal_answer') || lower.includes('column')) {
-        const fallbackPayload = { ...answerPayload };
-        delete fallbackPayload.time_taken_seconds;
-        delete fallbackPayload.ideal_answer;
-        const retry = await fetch(`${supabaseUrl}/rest/v1/answers`, {
-          method: 'POST',
-          headers: {
-            ...baseHeaders,
-            Prefer: 'return=minimal',
-          },
-          body: JSON.stringify(fallbackPayload),
-        });
-        if (!retry.ok) throw new Error(await retry.text() || 'Failed to save answer');
-      } else {
-        throw new Error(errText || 'Failed to save answer');
+    if (existingId) {
+      const patchPayload = { ...answerPayload };
+      delete patchPayload.session_id;
+      delete patchPayload.user_id;
+      delete patchPayload.question;
+      delete patchPayload.created_at;
+      
+      const patchRes = await fetch(`${supabaseUrl}/rest/v1/answers?id=eq.${existingId}`, {
+        method: 'PATCH',
+        headers: {
+          ...baseHeaders,
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(patchPayload),
+      });
+
+      if (!patchRes.ok) {
+        throw new Error(await patchRes.text() || 'Failed to update answer');
+      }
+    } else {
+      const answerRes = await fetch(`${supabaseUrl}/rest/v1/answers`, {
+        method: 'POST',
+        headers: {
+          ...baseHeaders,
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(answerPayload),
+      });
+
+      if (!answerRes.ok) {
+        const errText = await answerRes.text();
+        const lower = errText.toLowerCase();
+        if (lower.includes('time_taken') || lower.includes('ideal_answer') || lower.includes('column')) {
+          const fallbackPayload = { ...answerPayload };
+          delete fallbackPayload.time_taken_seconds;
+          delete fallbackPayload.ideal_answer;
+          const retry = await fetch(`${supabaseUrl}/rest/v1/answers`, {
+            method: 'POST',
+            headers: {
+              ...baseHeaders,
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify(fallbackPayload),
+          });
+          if (!retry.ok) throw new Error(await retry.text() || 'Failed to save answer');
+        } else {
+          throw new Error(errText || 'Failed to save answer');
+        }
       }
     }
 

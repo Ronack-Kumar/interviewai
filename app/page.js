@@ -345,6 +345,8 @@ export default function Page() {
   const [mobilePanel, setMobilePanel] = useState(null);
 
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [setupModalOpen, setSetupModalOpen] = useState(true);
+  const [selfPaced, setSelfPaced] = useState(false);
   const [timeUpModalOpen, setTimeUpModalOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState('none');
   const [timerRemainingSec, setTimerRemainingSec] = useState(null);
@@ -715,8 +717,9 @@ export default function Page() {
 
   useEffect(() => {
     if (!authReady || (!userId && !guestMode)) return;
+    if (setupModalOpen) return;
     loadQuestions();
-  }, [mode, activePack, selectedRole, loadQuestions, authReady, userId, guestMode]);
+  }, [mode, activePack, selectedRole, timerPreset, loadQuestions, authReady, userId, guestMode, setupModalOpen]);
 
   useEffect(() => {
     document.body.classList.toggle('high-contrast', highContrast);
@@ -993,6 +996,7 @@ export default function Page() {
   }, [attemptCameraReconnect]);
 
   const startCamera = async () => {
+    if (selfPaced) return;
     setCameraEnabled(true);
     cameraEnabledRef.current = true;
     try {
@@ -1042,6 +1046,7 @@ export default function Page() {
   }, [detachTrackListeners, handleCameraLost, stopReconnectLoop]);
 
   const toggleRecord = useCallback(async () => {
+    if (selfPaced) return;
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       showToast('Speech recognition not supported in this browser', true);
       return;
@@ -1803,52 +1808,7 @@ export default function Page() {
           ))}
         </div>
 
-        <div className={`resume-sidebar ${resumeExpanded ? 'resume-sidebar--open' : ''}`}>
-          <button
-            type="button"
-            className="resume-sidebar__toggle"
-            aria-expanded={resumeExpanded}
-            onClick={() => setResumeExpanded((x) => !x)}
-          >
-            📄 Resume
-          </button>
-          <div className="resume-sidebar__body">
-            <input
-              ref={resumeFileInputRef}
-              id="resume-file-input"
-              type="file"
-              accept=".txt,.pdf,application/pdf"
-              style={{ display: 'none' }}
-              onChange={handleResumeUpload}
-            />
-            <button
-              type="button"
-              className="resume-sidebar__upload-btn"
-              onClick={() => resumeFileInputRef.current?.click()}
-            >
-              📄 Upload PDF or TXT file
-            </button>
-            <p className="resume-sidebar__or">or</p>
-            <textarea
-              className="resume-sidebar__textarea"
-              placeholder="Paste your resume here..."
-              value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
-              onBlur={handleResumeTextBlur}
-              rows={5}
-            />
-            {resumeFileName ? (
-              <button type="button" className="resume-sidebar__clear" onClick={clearResume}>
-                Clear resume
-              </button>
-            ) : null}
-            {resumeConfirm ? (
-              <p className="resume-sidebar__confirm" role="status">
-                {resumeConfirm}
-              </p>
-            ) : null}
-          </div>
-        </div>
+
 
         {mode === 'technical' && (
           <>
@@ -2493,26 +2453,28 @@ export default function Page() {
           ) : (
             <div className="interview-layout" style={{ ['--camera-col-w']: `${cameraHeight}px` }}>
               <div className="interview-layout__left">
-                <div className="tab-strip" role="tablist">
-                  {[
-                    { id: 'video', label: 'Video' },
-                    { id: 'audio', label: 'Audio' },
-                    { id: 'text', label: 'Text' },
-                  ].map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="tab"
-                      className={`tab ${activeTab === t.id ? 'active' : ''}`}
-                      aria-selected={activeTab === t.id}
-                      onClick={() => setActiveTab(t.id)}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+                {!selfPaced && (
+                  <div className="tab-strip" role="tablist">
+                    {[
+                      { id: 'video', label: 'Video' },
+                      { id: 'audio', label: 'Audio' },
+                      { id: 'text', label: 'Text' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        className={`tab ${activeTab === t.id ? 'active' : ''}`}
+                        aria-selected={activeTab === t.id}
+                        onClick={() => setActiveTab(t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                <div className="media-row interview-layout__media" hidden={activeTab === 'text'}>
+                <div className="media-row interview-layout__media" hidden={selfPaced || activeTab === 'text'}>
                   <div
                     className={`video-wrap ${videoActive ? 'video-wrap--live' : ''}`}
                     style={{ display: activeTab === 'audio' ? 'none' : 'block' }}
@@ -2771,16 +2733,18 @@ export default function Page() {
               >
                 Clear
               </button>
-              <button
-                type="button"
-                className={`record-fab controls-row__mic ${recording ? 'recording' : ''}`}
-                aria-label={recording ? 'Stop recording' : 'Record answer'}
-                aria-pressed={recording}
-                onClick={toggleRecord}
-                disabled={controlsDisabled || readOnly}
-              >
-                <IconMic />
-              </button>
+              {!selfPaced && (
+                <button
+                  type="button"
+                  className={`record-fab controls-row__mic ${recording ? 'recording' : ''}`}
+                  aria-label={recording ? 'Stop recording' : 'Record answer'}
+                  aria-pressed={recording}
+                  onClick={toggleRecord}
+                  disabled={controlsDisabled || readOnly}
+                >
+                  <IconMic />
+                </button>
+              )}
             </div>
             <span style={{ flex: 1 }} aria-hidden />
             <div className="interview-action-bar__right">
@@ -2888,6 +2852,141 @@ export default function Page() {
           </div>
         </>
       )}
+
+      {/* Setup Modal */}
+      <div className={`session-overlay ${setupModalOpen ? 'open' : ''}`} style={{ zIndex: 100 }}>
+        <div className="session-card" role="dialog" aria-modal="true" aria-label="Setup Interview">
+          <h2 style={{ margin: '0 0 16px', fontSize: 20 }}>Configure Your Interview</h2>
+          
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+              Interview Mode
+            </label>
+            <select
+              value={mode}
+              onChange={(e) => setModeState(e.target.value)}
+              className="role-select"
+              style={{ marginBottom: 0 }}
+            >
+              <option value="behavioral">Behavioral</option>
+              <option value="technical">Technical</option>
+              <option value="coding">Coding (Data Structures & Algorithms)</option>
+              <option value="case">Case Study</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+              Target Role
+            </label>
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="role-select"
+              style={{ marginBottom: 0 }}
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+              Session Timer
+            </label>
+            <select
+              value={timerPreset}
+              onChange={(e) => setTimerPreset(e.target.value)}
+              className="role-select"
+              style={{ marginBottom: 0 }}
+              disabled={selfPaced}
+            >
+              <option value="none">No limit</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="checkbox"
+              id="selfPacedToggle"
+              checked={selfPaced}
+              onChange={(e) => {
+                setSelfPaced(e.target.checked);
+                if (e.target.checked) setTimerPreset('none');
+              }}
+              style={{ width: 16, height: 16 }}
+            />
+            <label htmlFor="selfPacedToggle" style={{ fontSize: 14, color: 'var(--text)' }}>
+              Self-Paced Mode (No camera/audio recording, no time limits)
+            </label>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px' }}
+            onClick={() => {
+              setSetupModalOpen(false);
+            }}
+          >
+            Start Interview
+          </button>
+        </div>
+      </div>
+
+      <div className={`resume-sidebar ${resumeExpanded ? 'resume-sidebar--open' : ''}`}>
+        <button
+          type="button"
+          className="resume-sidebar__toggle"
+          aria-expanded={resumeExpanded}
+          onClick={() => setResumeExpanded((x) => !x)}
+        >
+          📄 Resume
+        </button>
+        <div className="resume-sidebar__body">
+          <input
+            ref={resumeFileInputRef}
+            id="resume-file-input"
+            type="file"
+            accept=".txt,.pdf,application/pdf"
+            style={{ display: 'none' }}
+            onChange={handleResumeUpload}
+          />
+          <button
+            type="button"
+            className="resume-sidebar__upload-btn"
+            onClick={() => resumeFileInputRef.current?.click()}
+          >
+            📄 Upload PDF or TXT file
+          </button>
+          <p className="resume-sidebar__or">or</p>
+          <textarea
+            className="resume-sidebar__textarea"
+            placeholder="Paste your resume here..."
+            value={resumeText}
+            onChange={(e) => setResumeText(e.target.value)}
+            onBlur={handleResumeTextBlur}
+            rows={5}
+          />
+          {resumeFileName ? (
+            <button type="button" className="resume-sidebar__clear" onClick={clearResume}>
+              Clear resume
+            </button>
+          ) : null}
+          {resumeConfirm ? (
+            <p className="resume-sidebar__confirm" role="status">
+              {resumeConfirm}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       <div className={`time-up-overlay ${timeUpModalOpen ? 'open' : ''}`}>
         <div className="time-up-card">

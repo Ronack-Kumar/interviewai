@@ -91,7 +91,19 @@ ${answer}`;
     }
     let parsed;
     try {
-      parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      // Extract just the JSON object in case there is surrounding text
+      const firstBrace = cleanText.indexOf('{');
+      const lastBrace = cleanText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+      }
+      // Fix invalid escape sequences (e.g., \' -> ')
+      cleanText = cleanText.replace(/\\([^"\\/bfnrtu])/g, '$1');
+      // Strip control characters EXCEPT newlines and carriage returns, which are valid between tokens
+      cleanText = cleanText.replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      
+      parsed = JSON.parse(cleanText);
     } catch (parseErr) {
       return Response.json(
         {
