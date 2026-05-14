@@ -2047,8 +2047,10 @@ export default function Page() {
               aria-label="Send feedback"
               title="Send feedback or report a bug"
               onClick={() => setFeedbackModalOpen(true)}
+              style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               💬
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Feedback</span>
             </button>
             <button
               type="button"
@@ -2060,17 +2062,22 @@ export default function Page() {
                 applyTheme(next);
                 setThemeMode(next);
               }}
+              style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               {themeMode === 'light' ? '🌙' : '☀️'}
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Theme</span>
             </button>
             <button
               type="button"
               className="settings-btn"
               aria-label="Settings"
               aria-expanded={settingsOpen}
+              title="Settings"
               onClick={() => setSettingsOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <IconGear />
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Settings</span>
             </button>
           </div>
         </div>
@@ -2494,7 +2501,7 @@ export default function Page() {
                       { id: 'video', label: 'Video' },
                       { id: 'audio', label: 'Audio' },
                       { id: 'text', label: 'Text' },
-                    ].map((t) => (
+                    ].filter(t => !(selfPaced && t.id === 'video')).map((t) => (
                       <button
                         key={t.id}
                         type="button"
