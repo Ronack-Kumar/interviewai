@@ -172,6 +172,7 @@ export default function ReportClient() {
               mode: session.mode,
             }),
           });
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           const raw = await res.json();
           console.log('Feedback API raw:', raw);
           if (!res.ok || raw.error) continue;
@@ -201,14 +202,13 @@ export default function ReportClient() {
       }
 
       await loadReportData(false);
-      router.refresh();
     } catch (e) {
       console.error(e);
       setFeedbackErr(e.message || 'Failed to get AI feedback');
     } finally {
       setFeedbackBusy(false);
     }
-  }, [loadReportData, router, safeAnswers, session, sessionId]);
+  }, [loadReportData, safeAnswers, session, sessionId]);
 
   const avgScore =
     safeAnswers.length > 0
