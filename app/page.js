@@ -809,11 +809,12 @@ export default function Page() {
   }, [ttsSpeaking, getReadAloudText, runSpeech]);
 
   useEffect(() => {
-    if (loadingQuestions || !readAloudOn) return;
+    if (loadingQuestions) return;
+    if (!readAloudOn && activeTab !== 'audio') return;
     const text = getReadAloudText();
     if (!text) return;
     runSpeech(text);
-  }, [readAloudOn, questionIndex, loadingQuestions, getReadAloudText, runSpeech]);
+  }, [readAloudOn, activeTab, questionIndex, loadingQuestions, getReadAloudText, runSpeech]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('FaceDetector' in window) || !window.FaceDetector) {
