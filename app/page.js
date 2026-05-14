@@ -502,18 +502,18 @@ export default function Page() {
         const payload =
           mode === 'coding'
             ? {
-                mode,
-                pack: activePack,
-                resumeText: rt || '',
-                role: selectedRole,
-                difficulty: 'medium',
-              }
+              mode,
+              pack: activePack,
+              resumeText: rt || '',
+              role: selectedRole,
+              difficulty: 'medium',
+            }
             : {
-                mode,
-                pack: activePack,
-                resumeText: rt || '',
-                role: selectedRole,
-              };
+              mode,
+              pack: activePack,
+              resumeText: rt || '',
+              role: selectedRole,
+            };
         console.log('[MockPrep] POST /api/questions payload:', {
           mode: payload.mode,
           role: payload.role,
@@ -2666,40 +2666,40 @@ export default function Page() {
 
                   {false && (
                     <div
-                    className="feedback-inline-panel"
-                    hidden={!(feedbackLoading || feedbackData || feedbackError)}
-                  >
-                    {feedbackLoading && (
-                      <p className="feedback-placeholder">
-                        <span className="loading-dots">Analysing your answer</span>
-                      </p>
-                    )}
-                    {feedbackError && !feedbackLoading && (
-                      <p className="err-text">
-                        {feedbackError}
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          style={{ marginTop: 12 }}
-                          onClick={() => fetchAiFeedback()}
-                        >
-                          Retry
-                        </button>
-                      </p>
-                    )}
-                    {feedbackData && !feedbackLoading && (
-                      <>
-                        <div className="feedback-head" style={{ marginBottom: 10 }}>
-                          Feedback
-                        </div>
-                        <div className="score-display">
-                          <span className="score-display__main">
-                            {Number(feedbackData.score).toFixed(1)}
-                          </span>
-                          <span className="score-display__sub">/10</span>
-                        </div>
-                      </>
-                    )}
+                      className="feedback-inline-panel"
+                      hidden={!(feedbackLoading || feedbackData || feedbackError)}
+                    >
+                      {feedbackLoading && (
+                        <p className="feedback-placeholder">
+                          <span className="loading-dots">Analysing your answer</span>
+                        </p>
+                      )}
+                      {feedbackError && !feedbackLoading && (
+                        <p className="err-text">
+                          {feedbackError}
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ marginTop: 12 }}
+                            onClick={() => fetchAiFeedback()}
+                          >
+                            Retry
+                          </button>
+                        </p>
+                      )}
+                      {feedbackData && !feedbackLoading && (
+                        <>
+                          <div className="feedback-head" style={{ marginBottom: 10 }}>
+                            Feedback
+                          </div>
+                          <div className="score-display">
+                            <span className="score-display__main">
+                              {Number(feedbackData.score).toFixed(1)}
+                            </span>
+                            <span className="score-display__sub">/10</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -2894,7 +2894,7 @@ export default function Page() {
       <div className={`session-overlay ${setupModalOpen ? 'open' : ''}`} style={{ zIndex: 100 }}>
         <div className="session-card" role="dialog" aria-modal="true" aria-label="Setup Interview">
           <h2 style={{ margin: '0 0 16px', fontSize: 20 }}>Configure Your Interview</h2>
-          
+
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
               Interview Mode

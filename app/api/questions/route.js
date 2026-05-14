@@ -1,8 +1,91 @@
-// Generates interview questions / coding problems via Groq
+// Generates interview questions / coding problems
+// Primary: Groq | Fallback: Google Gemini Flash
+
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+// ── Shared helpers ───────────────────────────────────────────────────
+function safeParseJSON(text) {
+  let clean = text.replace(/```json|```/g, '').trim();
+  clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  clean = clean.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+  clean = clean.replace(/"([^"]*)"/g, (match) =>
+    match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+  );
+  try {
+    return JSON.parse(clean);
+  } catch {
+    const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+    if (!match) throw new Error('No valid JSON found in response');
+    return JSON.parse(match[1]);
+  }
+}
+
+// ── Groq call ────────────────────────────────────────────────────────
+async function callGroq({ model, systemPrompt, userPrompt, temperature, max_tokens }) {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error('GROQ_API_KEY not set');
+
+  const res = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature,
+      max_tokens,
+    }),
+  });
+
+  if (res.status === 429) throw Object.assign(new Error('Groq rate limit'), { status: 429 });
+
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('No text from Groq');
+  return text;
+}
+
+// ── Gemini call ──────────────────────────────────────────────────────
+async function callGemini({ systemPrompt, userPrompt, temperature, max_tokens }) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY not set');
+
+  const res = await fetch(`${GEMINI_API_URL}?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature, maxOutputTokens: max_tokens },
+    }),
+  });
+
+  if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
+
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('No text from Gemini');
+  return text;
+}
+
+// ── Smart router: try Groq, fallback to Gemini ───────────────────────
+async function callAI(params) {
+  try {
+    const text = await callGroq(params);
+    console.log('✅ Questions served by Groq');
+    return text;
+  } catch (groqErr) {
+    console.warn('⚠️ Groq failed:', groqErr.message, '— trying Gemini...');
+    const text = await callGemini(params);
+    console.log('✅ Questions served by Gemini (fallback)');
+    return text;
+  }
+}
 
 export async function POST(request) {
-  console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
-  console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 8));
   const body = await request.json();
   const { mode, pack, resumeText, role } = body;
 
@@ -10,15 +93,16 @@ export async function POST(request) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
   }
 
-  const geminiKey = process.env.GROQ_API_KEY;
-  if (!geminiKey) {
-    return Response.json({ error: 'API key not configured' }, { status: 500 });
+  const hasGroqKey = !!process.env.GROQ_API_KEY;
+  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+  console.log('GROQ key exists:', hasGroqKey, '| GEMINI key exists:', hasGeminiKey);
+
+  if (!hasGroqKey && !hasGeminiKey) {
+    return Response.json({ error: 'No API key configured' }, { status: 500 });
   }
 
   const roleLabel =
-    typeof role === 'string' && role.trim()
-      ? role.trim()
-      : 'Software Engineer';
+    typeof role === 'string' && role.trim() ? role.trim() : 'Software Engineer';
 
   const modeDescriptions = {
     technical: 'technical software engineering interview (data structures, algorithms, system design, databases)',
@@ -37,36 +121,7 @@ export async function POST(request) {
 
   const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
 
-  function safeParseJSON(text) {
-    let clean = text
-      .replace(/```json|```/g, '')
-      .trim();
-
-    // Remove all control characters except \n, \r, \t
-    clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
-    // Fix bad backslash escapes
-    clean = clean.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
-
-    // Replace literal newlines inside strings with \n
-    clean = clean.replace(/"([^"]*)"/g, (match) => {
-      return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-    });
-
-    try {
-      return JSON.parse(clean);
-    } catch (parseErr) {
-      const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-      if (!match) throw new Error('No valid JSON found in response');
-      try {
-        return JSON.parse(match[1]);
-      } catch {
-        throw new Error('Failed to parse JSON: ' + parseErr.message);
-      }
-    }
-  }
-
-  // ── Coding round: structured problems ─────────────────────────────
+  // ── Coding round ─────────────────────────────────────────────────
   if (mode === 'coding') {
     const systemPrompt = `You are an expert coding interview author. Generate exactly 6 unique algorithmic problems as a JSON array ONLY (no markdown).
 Each element must be an object with these keys:
@@ -91,31 +146,13 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     }
 
     try {
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${geminiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.75,
-          max_tokens: 4096,
-        }),
+      const text = await callAI({
+        model: 'llama-3.1-8b-instant', // for Groq; Gemini ignores this field
+        systemPrompt,
+        userPrompt,
+        temperature: 0.75,
+        max_tokens: 4096,
       });
-
-      const data = await groqRes.json();
-      console.log('Groq raw response:', JSON.stringify(data).slice(0, 500));
-      const text = data?.choices?.[0]?.message?.content
-        || data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) {
-        console.log('Groq no text found, raw:', JSON.stringify(data).slice(0, 300));
-        throw new Error('Invalid response from LLM');
-      }
 
       const parsed = safeParseJSON(text);
 
@@ -126,7 +163,7 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
         cpp: 'void solution() {\n  \n}',
       };
 
-      parsed.forEach(p => {
+      parsed.forEach((p) => {
         if (!p.templates) p.templates = starterTemplates;
       });
 
@@ -136,15 +173,7 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
 
       return Response.json({ problems: parsed.slice(0, 6) }, { status: 200 });
     } catch (err) {
-      console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
-      console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 10));
-      console.log('Questions API full error:', {
-        name: err?.name,
-        message: err?.message,
-        stack: err?.stack,
-        cause: err?.cause,
-      });
-      console.error('Questions API error:', err);
+      console.error('Questions (coding) API error:', err);
       return Response.json(
         { error: 'Failed to generate coding problems', detail: err.message },
         { status: 500 }
@@ -152,8 +181,8 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     }
   }
 
-  // ── Standard interview modes: 8 strings ─────────────────────────
-  let systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
+  // ── Standard interview modes: 8 questions ────────────────────────
+  const systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
 Make questions varied in difficulty and topic. Avoid repetition.`;
@@ -172,31 +201,13 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
 
   try {
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${geminiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.95,
-        max_tokens: 800,
-      }),
+    const text = await callAI({
+      model: 'llama-3.3-70b-versatile',
+      systemPrompt,
+      userPrompt,
+      temperature: 0.95,
+      max_tokens: 800,
     });
-
-    const data = await groqRes.json();
-    console.log('Groq raw response:', JSON.stringify(data).slice(0, 500));
-    const text = data?.choices?.[0]?.message?.content
-      || data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      console.log('Groq no text found, raw:', JSON.stringify(data).slice(0, 300));
-      throw new Error('Invalid response from LLM');
-    }
 
     const parsed = safeParseJSON(text);
 
@@ -206,14 +217,6 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
 
     return Response.json({ questions: parsed }, { status: 200 });
   } catch (err) {
-    console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
-    console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 10));
-    console.log('Questions API full error:', {
-      name: err?.name,
-      message: err?.message,
-      stack: err?.stack,
-      cause: err?.cause,
-    });
     console.error('Questions API error:', err);
     return Response.json({ error: 'Failed to generate questions', detail: err.message }, { status: 500 });
   }
