@@ -49,25 +49,28 @@ async function callGroq({ model, systemPrompt, userPrompt, temperature, max_toke
 }
 
 // ── Gemini call ──────────────────────────────────────────────────────
-async function callGemini({ systemPrompt, userPrompt, temperature, max_tokens }) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY not set');
+async function callGemini(systemPrompt, userPrompt) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const res = await fetch(`${GEMINI_API_URL}?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature, maxOutputTokens: max_tokens },
-    }),
-  });
-
-  if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+      }),
+    }
+  );
 
   const data = await res.json();
+  console.log('Gemini raw response:', JSON.stringify(data).slice(0, 300));
+  
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No text from Gemini');
+  if (!text) throw new Error('No text from Gemini: ' + JSON.stringify(data).slice(0, 200));
   return text;
 }
 
@@ -79,7 +82,7 @@ async function callAI(params) {
     return text;
   } catch (groqErr) {
     console.warn('⚠️ Groq failed:', groqErr.message, '— trying Gemini...');
-    const text = await callGemini(params);
+    const text = await callGemini(params.systemPrompt, params.userPrompt);
     console.log('✅ Questions served by Gemini (fallback)');
     return text;
   }

@@ -155,10 +155,10 @@ export default function ReportClient() {
   }, [session]);
 
   const handleGetAllFeedback = useCallback(async () => {
-    if (!session || !sessionId) return;
-    setFeedbackBusy(true);
-    setFeedbackErr('');
     try {
+      if (!session || !sessionId) return;
+      setFeedbackBusy(true);
+      setFeedbackErr('');
       const supabase = createClient();
 
       for (const answerRow of safeAnswers) {
@@ -172,33 +172,38 @@ export default function ReportClient() {
               mode: session.mode,
             }),
           });
-          const parsed = await res.json();
-          if (!res.ok || parsed.error) continue;
+          const raw = await res.json();
+          console.log('Feedback API raw:', raw);
+          if (!res.ok || raw.error) continue;
 
           if (answerRow?.id) {
-            const { error: updateError } = await supabase
+            const { data, error: updateError } = await supabase
               .from('answers')
               .update({
-                score: parsed.score ?? null,
-                accuracy: parsed.accuracy ?? null,
-                clarity: parsed.clarity ?? null,
-                depth: parsed.depth ?? null,
-                feedback: parsed.feedback ?? null,
-                ideal_answer: parsed.idealAnswer ?? '',
+                score: raw.score ?? null,
+                accuracy: raw.accuracy ?? null,
+                clarity: raw.clarity ?? null,
+                depth: raw.depth ?? null,
+                feedback: raw.feedback ?? null,
+                ideal_answer: raw.idealAnswer ?? '',
               })
               .eq('id', answerRow.id);
+            console.log('Update result:', data, updateError);
             if (updateError) {
               console.error('Supabase update error:', updateError);
               continue;
             }
           }
-        } catch {
+        } catch (innerErr) {
+          console.error(innerErr);
           continue;
         }
       }
 
       await loadReportData(false);
+      router.refresh();
     } catch (e) {
+      console.error(e);
       setFeedbackErr(e.message || 'Failed to get AI feedback');
     } finally {
       setFeedbackBusy(false);
