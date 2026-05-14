@@ -30,6 +30,10 @@ function computeRadarRows(answers) {
   const n = answers.length || 1;
   const avg = (key) =>
     answers.reduce((s, a) => s + (typeof a?.[key] === 'number' ? a[key] : 0), 0) / n;
+  const radarVal = (x) => {
+    const num = Number(x);
+    return Number.isFinite(num) ? Number(num.toFixed(1)) : 0;
+  };
   const acc = avg('accuracy');
   const clar = avg('clarity');
   const dep = avg('depth');
@@ -49,11 +53,11 @@ function computeRadarRows(answers) {
   }
   const communication = Math.min(10, commSum / n);
   return [
-    { metric: 'Accuracy', value: Number(acc.toFixed(1)) },
-    { metric: 'Clarity', value: Number(clar.toFixed(1)) },
-    { metric: 'Depth', value: Number(dep.toFixed(1)) },
-    { metric: 'Communication', value: Number(communication.toFixed(1)) },
-    { metric: 'Consistency', value: Number(consistency.toFixed(1)) },
+    { metric: 'Accuracy', value: radarVal(acc) },
+    { metric: 'Clarity', value: radarVal(clar) },
+    { metric: 'Depth', value: radarVal(dep) },
+    { metric: 'Communication', value: radarVal(communication) },
+    { metric: 'Consistency', value: radarVal(consistency) },
   ];
 }
 
@@ -76,13 +80,16 @@ export default function ReportClient() {
     safeAnswers.length > 0 && safeAnswers.every((a) => a?.score === null || a?.score === undefined);
 
   const loadReportData = useCallback(
-    async (cancelled = false) => {
+    async (cancelled = false, opts = {}) => {
+      const { skipAuthRedirect = false } = opts;
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.replace('/auth');
+        if (!skipAuthRedirect) {
+          router.replace('/auth');
+        }
         return;
       }
       if (cancelled) return;
@@ -201,7 +208,7 @@ export default function ReportClient() {
         }
       }
 
-      await loadReportData(false);
+      await loadReportData(false, { skipAuthRedirect: true });
     } catch (e) {
       console.error(e);
       setFeedbackErr(e.message || 'Failed to get AI feedback');
