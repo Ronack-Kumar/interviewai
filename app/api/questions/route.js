@@ -2,7 +2,13 @@
 // Primary: Groq | Fallback: Google Gemini Flash
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_MODEL_TRY_ORDER = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.0-flash-001',
+  'gemini-3-flash-preview',
+];
 
 // ── Shared helpers ───────────────────────────────────────────────────
 function safeParseJSON(text) {
@@ -48,30 +54,57 @@ async function callGroq({ model, systemPrompt, userPrompt, temperature, max_toke
   return text;
 }
 
+function geminiExtractText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('');
+}
+
+function geminiShouldTryNextModel(res, errorMessage) {
+  if (res.status === 404) return true;
+  const m = String(errorMessage || '');
+  return /not found|is not found|does not exist|was not found|UNAVAILABLE_MODEL|MODEL_NOT_FOUND/i.test(m);
+}
+
 // ── Gemini call ──────────────────────────────────────────────────────
 async function callGemini(systemPrompt, userPrompt) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-    {
+  const generationConfig = { temperature: 0.75, maxOutputTokens: 4096 };
+  let lastError = '';
+
+  for (const modelId of GEMINI_MODEL_TRY_ORDER) {
+    const res = await fetch(`${GEMINI_REST_BASE}/${modelId}:generateContent?key=${geminiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+        generationConfig,
       }),
-    }
-  );
+    });
 
-  const data = await res.json();
-  console.log('Gemini raw response:', JSON.stringify(data).slice(0, 300));
-  
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No text from Gemini: ' + JSON.stringify(data).slice(0, 200));
-  return text;
+    if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
+
+    const data = await res.json();
+    console.log(`Gemini (${modelId}):`, JSON.stringify(data).slice(0, 300));
+
+    const errMsg = data?.error?.message || '';
+
+    if (!res.ok) {
+      lastError = `Gemini HTTP ${res.status} (${modelId}): ${errMsg || JSON.stringify(data).slice(0, 200)}`;
+      if (geminiShouldTryNextModel(res, errMsg)) continue;
+      throw new Error(lastError);
+    }
+
+    const text = geminiExtractText(data);
+    if (text) return text;
+
+    lastError = 'No text from Gemini (' + modelId + '): ' + JSON.stringify(data).slice(0, 200);
+  }
+
+  throw new Error(lastError || 'All Gemini models failed');
 }
 
 // ── Smart router: try Groq, fallback to Gemini ───────────────────────

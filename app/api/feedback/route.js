@@ -2,7 +2,14 @@
 // Primary: Groq | Fallback: Google Gemini Flash
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+/** Unversioned flash IDs are often retired; try current IDs until one works. */
+const GEMINI_MODEL_TRY_ORDER = [
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-2.0-flash-001',
+  'gemini-3-flash-preview',
+];
 
 const SYSTEM_PROMPTS = {
   hr: `You are an expert HR interview coach specialising in behavioural interviews.
@@ -79,45 +86,64 @@ async function callGroq(systemPrompt, userContent) {
   return text;
 }
 
+function geminiExtractText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('');
+}
+
+function geminiShouldTryNextModel(res, errorMessage) {
+  if (res.status === 404) return true;
+  const m = String(errorMessage || '');
+  return /not found|is not found|does not exist|was not found|UNAVAILABLE_MODEL|MODEL_NOT_FOUND/i.test(m);
+}
+
 // ── Gemini call ──────────────────────────────────────────────────────
 async function callGemini(systemPrompt, userContent) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
 
-  const res = await fetch(`${GEMINI_API_URL}?key=${geminiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userContent }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
-    }),
-  });
+  const generationConfig = { temperature: 0.3, maxOutputTokens: 800 };
+  let lastError = '';
 
-  if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
+  for (const modelId of GEMINI_MODEL_TRY_ORDER) {
+    const res = await fetch(`${GEMINI_REST_BASE}/${modelId}:generateContent?key=${geminiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userContent }] }],
+        generationConfig,
+      }),
+    });
 
-  const data = await res.json();
-  console.log('Gemini full response:', JSON.stringify(data).slice(0, 500));
+    if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
 
-  if (!res.ok) {
-    const msg = data?.error?.message || JSON.stringify(data).slice(0, 300);
-    throw new Error(`Gemini HTTP ${res.status}: ${msg}`);
-  }
+    const data = await res.json();
+    console.log(`Gemini (${modelId}):`, JSON.stringify(data).slice(0, 500));
 
-  const parts = data?.candidates?.[0]?.content?.parts;
-  const text = Array.isArray(parts)
-    ? parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('')
-    : '';
-  if (!text) {
+    const errMsg = data?.error?.message || '';
+
+    if (!res.ok) {
+      lastError = `Gemini HTTP ${res.status} (${modelId}): ${errMsg || JSON.stringify(data).slice(0, 300)}`;
+      if (geminiShouldTryNextModel(res, errMsg)) continue;
+      throw new Error(lastError);
+    }
+
+    const text = geminiExtractText(data);
+    if (text) return text;
+
     const reason = data?.candidates?.[0]?.finishReason || data?.promptFeedback || '';
-    throw new Error(
-      'No text from Gemini' +
-        (reason ? ` (${JSON.stringify(reason).slice(0, 200)})` : '') +
-        ': ' +
-        JSON.stringify(data).slice(0, 400)
-    );
+    lastError =
+      'No text from Gemini (' +
+      modelId +
+      ')' +
+      (reason ? ` (${JSON.stringify(reason).slice(0, 200)})` : '') +
+      ': ' +
+      JSON.stringify(data).slice(0, 400);
   }
-  return text;
+
+  throw new Error(lastError || 'All Gemini models failed');
 }
 
 export async function POST(request) {
