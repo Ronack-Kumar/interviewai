@@ -167,6 +167,8 @@ export default function ReportClient() {
       setFeedbackBusy(true);
       setFeedbackErr('');
       const supabase = createClient();
+      /** Merge into UI after successful DB writes (avoids full reload + chart remount issues). */
+      const patchesByAnswerId = new Map();
 
       for (const answerRow of safeAnswers) {
         try {
@@ -185,22 +187,24 @@ export default function ReportClient() {
           if (!res.ok || raw.error) continue;
 
           if (answerRow?.id) {
+            const patch = {
+              score: raw.score ?? null,
+              accuracy: raw.accuracy ?? null,
+              clarity: raw.clarity ?? null,
+              depth: raw.depth ?? null,
+              feedback: raw.feedback ?? null,
+              ideal_answer: raw.idealAnswer ?? '',
+            };
             const { data, error: updateError } = await supabase
               .from('answers')
-              .update({
-                score: raw.score ?? null,
-                accuracy: raw.accuracy ?? null,
-                clarity: raw.clarity ?? null,
-                depth: raw.depth ?? null,
-                feedback: raw.feedback ?? null,
-                ideal_answer: raw.idealAnswer ?? '',
-              })
+              .update(patch)
               .eq('id', answerRow.id);
             console.log('Update result:', data, updateError);
             if (updateError) {
               console.error('Supabase update error:', updateError);
               continue;
             }
+            patchesByAnswerId.set(answerRow.id, patch);
           }
         } catch (innerErr) {
           console.error(innerErr);
@@ -208,14 +212,23 @@ export default function ReportClient() {
         }
       }
 
-      await loadReportData(false, { skipAuthRedirect: true });
+      if (patchesByAnswerId.size > 0) {
+        setAnswers((prev) =>
+          prev.map((row) => {
+            const id = row?.id;
+            if (!id) return row;
+            const patch = patchesByAnswerId.get(id);
+            return patch ? { ...row, ...patch } : row;
+          })
+        );
+      }
     } catch (e) {
       console.error(e);
       setFeedbackErr(e.message || 'Failed to get AI feedback');
     } finally {
       setFeedbackBusy(false);
     }
-  }, [loadReportData, safeAnswers, session, sessionId]);
+  }, [safeAnswers, session, sessionId]);
 
   const avgScore =
     safeAnswers.length > 0
@@ -294,7 +307,6 @@ export default function ReportClient() {
             fillOpacity={0.35}
           />
           <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
-          <YAxis domain={[0, 10]} hide />
         </RadarChart>
       </ResponsiveContainer>
     ) : (
@@ -319,16 +331,15 @@ export default function ReportClient() {
           <XAxis dataKey="name" tick={{ fill: 'var(--muted)', fontSize: 11 }} />
           <YAxis domain={[0, 10]} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
           <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} />
-          <Bar dataKey="score" radius={[2, 2, 0, 0]}>
+          <Bar
+            dataKey="score"
+            radius={[2, 2, 0, 0]}
+            label={{ position: 'top', fill: 'var(--text-secondary)', fontSize: 11 }}
+          >
             {barData.map((e, i) => (
               <Cell key={i} fill={barColor(e.score)} />
             ))}
           </Bar>
-          <Bar
-            dataKey="score"
-            fillOpacity={0}
-            label={{ position: 'top', fill: 'var(--text-secondary)', fontSize: 11 }}
-          />
         </BarChart>
       </ResponsiveContainer>
     ) : (
