@@ -77,7 +77,6 @@ Each element must be an object with these keys:
 - "examples": array of objects {"input": string, "output": string, "explanation": string}
 - "visibleTests": array of exactly 3 objects {"input": string, "output": string} (shown to candidate)
 - "hiddenTests": array of exactly 2 objects {"input": string, "output": string} (not shown; for evaluation only)
-- "templates": object with keys: "python","javascript","java","cpp" — each value is starter code as a string for that language.
 
 Cover these topics, exactly one problem each — no two problems may share the same topic:
 arrays, strings, linked lists, trees, dynamic programming, sorting.
@@ -119,6 +118,17 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
       }
 
       const parsed = safeParseJSON(text);
+
+      const starterTemplates = {
+        python: 'def solution():\n    pass',
+        javascript: 'function solution() {\n  \n}',
+        java: 'public static void solution() {\n  \n}',
+        cpp: 'void solution() {\n  \n}',
+      };
+
+      parsed.forEach(p => {
+        if (!p.templates) p.templates = starterTemplates;
+      });
 
       if (!Array.isArray(parsed) || parsed.length === 0) {
         throw new Error('Response was not a valid array');
