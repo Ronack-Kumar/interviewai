@@ -160,13 +160,6 @@ export default function ReportClient() {
     setFeedbackErr('');
     try {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace('/auth');
-        return;
-      }
 
       for (const answerRow of safeAnswers) {
         try {
