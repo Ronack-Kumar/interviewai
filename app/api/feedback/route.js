@@ -2,7 +2,7 @@
 // Primary: Groq | Fallback: Google Gemini Flash
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 const SYSTEM_PROMPTS = {
   hr: `You are an expert HR interview coach specialising in behavioural interviews.
@@ -97,6 +97,7 @@ async function callGemini(systemPrompt, userContent) {
   if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
 
   const data = await res.json();
+  console.log('Gemini full response:', JSON.stringify(data).slice(0, 500));
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('No text from Gemini');
   return text;
