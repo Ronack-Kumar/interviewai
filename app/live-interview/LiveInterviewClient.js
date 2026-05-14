@@ -43,20 +43,13 @@ function stripForSpeech(text) {
     .slice(0, 4000);
 }
 
-/** At most two sentences for TTS reaction. */
-function feedbackToShortReaction(feedback) {
-  if (!feedback || typeof feedback !== 'string') return 'Good effort. Continue to the next question when you are ready.';
-  const t = String(feedback).replace(/\s+/g, ' ').trim();
-  const chunks = t.split(/(?<=[.!?])\s+/).filter(Boolean);
-  let out = '';
-  let n = 0;
-  for (const c of chunks) {
-    out = out ? `${out} ${c}` : c;
-    n++;
-    if (n >= 2) break;
-  }
-  if (!out) out = t.slice(0, 240);
-  return out.slice(0, 420);
+const PARSE_FAIL_PHRASE = /could not be fully parsed/i;
+const DEFAULT_REACTION = 'Good attempt! Moving to next question.';
+
+function reactionFromFeedback(raw) {
+  const fb = typeof raw?.feedback === 'string' ? raw.feedback.trim() : '';
+  if (!fb || PARSE_FAIL_PHRASE.test(fb)) return DEFAULT_REACTION;
+  return fb;
 }
 
 export default function LiveInterviewClient() {
@@ -85,6 +78,9 @@ export default function LiveInterviewClient() {
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const questionStartedAtRef = useRef(null);
+
+  const [enVoices, setEnVoices] = useState([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState('');
 
   const [reactionText, setReactionText] = useState('');
   const [reactionLoading, setReactionLoading] = useState(false);
@@ -136,14 +132,41 @@ export default function LiveInterviewClient() {
     setListening(false);
   }, [stopSilenceTimer]);
 
-  const speak = useCallback((text) => {
-    if (!canSpeechOut || !text) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(stripForSpeech(text));
-    u.rate = 0.95;
-    u.pitch = 1;
-    window.speechSynthesis.speak(u);
-  }, [canSpeechOut]);
+  const speak = useCallback(
+    (text) => {
+      if (!canSpeechOut || !text) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(stripForSpeech(text));
+      u.rate = 0.85;
+      u.pitch = 0.9;
+      const voices = window.speechSynthesis.getVoices() || [];
+      const v = voices.find((vo) => vo.voiceURI === selectedVoiceUri);
+      if (v) u.voice = v;
+      window.speechSynthesis.speak(u);
+    },
+    [canSpeechOut, selectedVoiceUri]
+  );
+
+  const refreshEnVoices = useCallback(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const all = window.speechSynthesis.getVoices() || [];
+    const en = all.filter((voice) => String(voice.lang || '').toLowerCase().startsWith('en'));
+    setEnVoices(en);
+    setSelectedVoiceUri((prev) => {
+      if (prev && en.some((v) => v.voiceURI === prev)) return prev;
+      const google = en.find((v) => /google/i.test(v.name));
+      return (google || en[0])?.voiceURI ?? '';
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!canSpeechOut) return;
+    refreshEnVoices();
+    const synth = window.speechSynthesis;
+    const onVoices = () => refreshEnVoices();
+    synth.addEventListener('voiceschanged', onVoices);
+    return () => synth.removeEventListener('voiceschanged', onVoices);
+  }, [canSpeechOut, refreshEnVoices]);
 
   useEffect(() => {
     return () => {
@@ -348,7 +371,6 @@ export default function LiveInterviewClient() {
     setReactionLoading(true);
     setPhase('reacting');
 
-    let short = '';
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
@@ -362,9 +384,8 @@ export default function LiveInterviewClient() {
       });
       const raw = await res.json();
       if (!res.ok || raw.error) throw new Error(raw.error || raw.detail || 'Feedback failed');
-      const fb = typeof raw.feedback === 'string' ? raw.feedback : '';
-      short = feedbackToShortReaction(fb);
-      setReactionText(short);
+      const reaction = reactionFromFeedback(raw);
+      setReactionText(reaction);
 
       if (userId && !guestMode) {
         await saveAnswerRemote({
@@ -374,17 +395,16 @@ export default function LiveInterviewClient() {
           accuracy: raw.accuracy ?? null,
           clarity: raw.clarity ?? null,
           depth: raw.depth ?? null,
-          feedback: fb || null,
+          feedback: typeof raw.feedback === 'string' ? raw.feedback : null,
           ideal_answer: raw.idealAnswer ?? '',
           time_taken_seconds: secs,
         });
       }
 
-      speak(short);
+      speak(reaction);
     } catch (e) {
-      const fallback = e.message || 'Could not load feedback.';
-      setReactionText(fallback);
-      speak(feedbackToShortReaction(fallback));
+      setReactionText(DEFAULT_REACTION);
+      speak(DEFAULT_REACTION);
       if (userId && !guestMode) {
         try {
           await saveAnswerRemote({
@@ -672,6 +692,36 @@ export default function LiveInterviewClient() {
           <ToggleChip small active={answerInput === 'text'} onClick={() => setAnswerInput('text')} disabled={isReacting}>
             Text
           </ToggleChip>
+          <span style={{ width: 16 }} />
+          <label htmlFor="live-voice-select" style={{ color: 'var(--muted)', fontSize: 12 }}>
+            Voice
+          </label>
+          <select
+            id="live-voice-select"
+            value={selectedVoiceUri}
+            onChange={(e) => setSelectedVoiceUri(e.target.value)}
+            disabled={!canSpeechOut || isReacting || enVoices.length === 0}
+            style={{
+              minWidth: 160,
+              maxWidth: 260,
+              padding: '6px 8px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-primary)',
+              fontSize: 12,
+            }}
+          >
+            {enVoices.length === 0 ? (
+              <option value="">Loading voices…</option>
+            ) : (
+              enVoices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {v.name}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         <div
