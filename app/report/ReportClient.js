@@ -344,6 +344,18 @@ export default function ReportClient() {
               <div style={{ color: 'var(--muted)', fontSize: 14 }}>Session Report</div>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  const url = `${window.location.origin}/report?session_id=${encodeURIComponent(sessionId)}`;
+                  navigator.clipboard.writeText(url)
+                    .then(() => alert('Share link copied to clipboard!'))
+                    .catch(() => alert('Could not copy link.'));
+                }}
+              >
+                🔗 Share
+              </button>
               <button type="button" className="btn btn-primary" disabled={pdfBusy} onClick={downloadPdf}>
                 {pdfBusy ? (
                   <>
