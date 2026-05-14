@@ -2489,14 +2489,14 @@ export default function Page() {
             </div>
           ) : (
             <div className="interview-layout" style={{ ['--camera-col-w']: `${cameraHeight}px` }}>
-              <div className="interview-layout__left">
-                {!selfPaced && (
+              {!selfPaced && (
+                <div className="interview-layout__left">
                   <div className="tab-strip" role="tablist">
                     {[
                       { id: 'video', label: 'Video' },
                       { id: 'audio', label: 'Audio' },
                       { id: 'text', label: 'Text' },
-                    ].filter(t => !(selfPaced && t.id === 'video')).map((t) => (
+                    ].map((t) => (
                       <button
                         key={t.id}
                         type="button"
@@ -2509,95 +2509,95 @@ export default function Page() {
                       </button>
                     ))}
                   </div>
-                )}
 
-                <div className="media-row interview-layout__media" hidden={selfPaced || activeTab === 'text'}>
-                  <div
-                    className={`video-wrap ${videoActive ? 'video-wrap--live' : ''}`}
-                    style={{ display: activeTab === 'audio' ? 'none' : 'block' }}
-                  >
-                    {!videoActive && (
-                      <div className="video-placeholder">
-                        <span>Camera off</span>
-                        <button type="button" className="allow-cam" onClick={startCamera}>
-                          Allow access
-                        </button>
-                      </div>
-                    )}
-                    <video
-                      ref={videoRef}
-                      className="video-feed"
-                      autoPlay
-                      muted
-                      playsInline
-                      onEmptied={handleCameraLost}
-                      style={{
-                        display: videoActive ? 'block' : 'none',
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        background: '#000',
-                      }}
-                    />
-                    <div className={`live-dot ${videoActive ? 'on' : ''}`}>● Live</div>
-                    <div className={`camera-reconnect-overlay ${cameraLost ? 'open' : ''}`}>
-                      <div className="camera-reconnect-msg">
-                        Camera disconnected — reconnecting...
-                      </div>
-                    </div>
+                  <div className="media-row interview-layout__media" hidden={activeTab === 'text'}>
                     <div
-                      className="face-look-toast"
-                      hidden={
-                        !faceLookToast ||
-                        (typeof window !== 'undefined' &&
-                          (!('FaceDetector' in window) || !window.FaceDetector))
-                      }
-                      role="status"
-                      style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)' }}
+                      className={`video-wrap ${videoActive ? 'video-wrap--live' : ''}`}
+                      style={{ display: activeTab === 'audio' ? 'none' : 'block' }}
                     >
-                      ⚠️ Please look at the camera
+                      {!videoActive && (
+                        <div className="video-placeholder">
+                          <span>Camera off</span>
+                          <button type="button" className="allow-cam" onClick={startCamera}>
+                            Allow access
+                          </button>
+                        </div>
+                      )}
+                      <video
+                        ref={videoRef}
+                        className="video-feed"
+                        autoPlay
+                        muted
+                        playsInline
+                        onEmptied={handleCameraLost}
+                        style={{
+                          display: videoActive ? 'block' : 'none',
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          background: '#000',
+                        }}
+                      />
+                      <div className={`live-dot ${videoActive ? 'on' : ''}`}>● Live</div>
+                      <div className={`camera-reconnect-overlay ${cameraLost ? 'open' : ''}`}>
+                        <div className="camera-reconnect-msg">
+                          Camera disconnected — reconnecting...
+                        </div>
+                      </div>
+                      <div
+                        className="face-look-toast"
+                        hidden={
+                          !faceLookToast ||
+                          (typeof window !== 'undefined' &&
+                            (!('FaceDetector' in window) || !window.FaceDetector))
+                        }
+                        role="status"
+                        style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)' }}
+                      >
+                        ⚠️ Please look at the camera
+                      </div>
+                      {videoActive && (
+                        <div className="video-badges">
+                          <span className={`cam-pill ${recording ? 'warn' : ''}`}>
+                            {recording ? '🎤 Mic on' : '🎤 Mic off'}
+                          </span>
+                          <span className="cam-pill ok">📷 Camera on</span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="video-resize-handle video-resize-handle--right"
+                        aria-label="Resize camera panel width"
+                        onMouseDown={onCameraResizeStart}
+                        onTouchStart={onCameraResizeStart}
+                      />
                     </div>
-                    {videoActive && (
-                      <div className="video-badges">
-                        <span className={`cam-pill ${recording ? 'warn' : ''}`}>
-                          {recording ? '🎤 Mic on' : '🎤 Mic off'}
-                        </span>
-                        <span className="cam-pill ok">📷 Camera on</span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="video-resize-handle video-resize-handle--right"
-                      aria-label="Resize camera panel width"
-                      onMouseDown={onCameraResizeStart}
-                      onTouchStart={onCameraResizeStart}
-                    />
-                  </div>
 
-                  <div className={`audio-tab-panel ${activeTab === 'audio' ? 'is-visible' : ''}`}>
-                    <button
-                      type="button"
-                      className={`record-fab ${recording ? 'recording' : ''}`}
-                      aria-label={recording ? 'Stop recording' : 'Record answer'}
-                      aria-pressed={recording}
-                      onClick={toggleRecord}
-                      disabled={controlsDisabled || readOnly}
-                    >
-                      <IconMic />
-                    </button>
-                    {recording ? (
-                      <div className="audio-tab-panel__viz" aria-hidden>
-                        {audioLevels.map((h, i) => (
-                          <div key={i} className="audio-bar" style={{ height: h }} />
-                        ))}
-                      </div>
-                    ) : null}
+                    <div className={`audio-tab-panel ${activeTab === 'audio' ? 'is-visible' : ''}`}>
+                      <button
+                        type="button"
+                        className={`record-fab ${recording ? 'recording' : ''}`}
+                        aria-label={recording ? 'Stop recording' : 'Record answer'}
+                        aria-pressed={recording}
+                        onClick={toggleRecord}
+                        disabled={controlsDisabled || readOnly}
+                      >
+                        <IconMic />
+                      </button>
+                      {recording ? (
+                        <div className="audio-tab-panel__viz" aria-hidden>
+                          {audioLevels.map((h, i) => (
+                            <div key={i} className="audio-bar" style={{ height: h }} />
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="interview-layout__right">
                 <div className="interview-layout__right-inner">
