@@ -54,7 +54,7 @@ export async function POST(request) {
 
   // ── Coding round: structured problems ─────────────────────────────
   if (mode === 'coding') {
-    const systemPrompt = `You are an expert coding interview author. Generate exactly 8 unique algorithmic problems as a JSON array ONLY (no markdown).
+    const systemPrompt = `You are an expert coding interview author. Generate exactly 6 unique algorithmic problems as a JSON array ONLY (no markdown).
 Each element must be an object with these keys:
 - "title": string
 - "difficulty": "Easy" | "Medium" | "Hard"
@@ -63,15 +63,15 @@ Each element must be an object with these keys:
 - "examples": array of objects {"input": string, "output": string, "explanation": string}
 - "visibleTests": array of exactly 3 objects {"input": string, "output": string} (shown to candidate)
 - "hiddenTests": array of exactly 2 objects {"input": string, "output": string} (not shown; for evaluation only)
-- "templates": object with keys: "python","javascript","java","cpp","c","go","rust","typescript","csharp","ruby","kotlin","swift" — each value is starter code as a string for that language.
+- "templates": object with keys: "python","javascript","java","cpp" — each value is starter code as a string for that language.
 
 Cover these topics, exactly one problem each — no two problems may share the same topic:
-arrays, strings, linked lists, trees, graphs, dynamic programming, sorting, two pointers.
+arrays, strings, linked lists, trees, dynamic programming, sorting.
 Each problem JSON object must implicitly reflect its distinct topic (vary problem statements accordingly).
 No plagiarism — original statements.`;
 
-    let userPrompt = `Generate 8 coding interview problems for a ${roleLabel} interview. Tailor difficulty mix: 2 Easy, 4 Medium, 2 Hard.
-Enforce one unique topic per problem from the fixed list (arrays, strings, linked lists, trees, graphs, dynamic programming, sorting, two pointers) — no duplicates.`;
+    let userPrompt = `Generate 6 coding interview problems for a ${roleLabel} interview. Tailor difficulty mix: 1 Easy, 3 Medium, 2 Hard.
+Enforce one unique topic per problem from the fixed list (arrays, strings, linked lists, trees, dynamic programming, sorting) — no duplicates.`;
 
     if (safeResumeText.trim().length > 50) {
       userPrompt += `\n\nCandidate background (tailor 2-3 problems):\n${safeResumeText}`;
@@ -85,13 +85,13 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
           Authorization: `Bearer ${geminiKey}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.75,
-          max_tokens: 8192,
+          max_tokens: 4096,
         }),
       });
 
@@ -110,7 +110,7 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
         throw new Error('Response was not a valid array');
       }
 
-      return Response.json({ problems: parsed.slice(0, 8) }, { status: 200 });
+      return Response.json({ problems: parsed.slice(0, 6) }, { status: 200 });
     } catch (err) {
       console.log('GROQ KEY exists:', !!process.env.GROQ_API_KEY);
       console.log('GROQ KEY prefix:', process.env.GROQ_API_KEY?.substring(0, 10));

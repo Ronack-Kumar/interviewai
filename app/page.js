@@ -2292,6 +2292,7 @@ export default function Page() {
                     readOnly={readOnly}
                     hideOutput
                     leetcodeFill
+                    editorTheme={themeMode === 'light' ? 'vs' : 'vs-dark'}
                     onPasteBlocked={() => {
                       showToast('Pasting is disabled in the coding interview editor.', true);
                       logViolation('monaco_paste_blocked', 'coding_paste');

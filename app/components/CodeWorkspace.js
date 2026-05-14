@@ -75,6 +75,7 @@ export default function CodeWorkspace({
   hideOutput = false,
   leetcodeFill = false,
   onPasteBlocked,
+  editorTheme = 'vs-dark',
 }) {
   const hostRef = useRef(null);
   const editorRef = useRef(null);
@@ -95,7 +96,7 @@ export default function CodeWorkspace({
         const ed = monaco.editor.create(hostRef.current, {
           value: value || '',
           language: language || 'python',
-          theme: 'vs-dark',
+          theme: editorTheme,
           fontSize: 13,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
@@ -163,6 +164,11 @@ export default function CodeWorkspace({
       ed.setValue(value);
     }
   }, [value]);
+
+  useEffect(() => {
+    if (!editorRef.current || typeof window === 'undefined' || !window.monaco) return;
+    window.monaco.editor.setTheme(editorTheme);
+  }, [editorTheme]);
 
   const rootClass = [
     'code-workspace',
