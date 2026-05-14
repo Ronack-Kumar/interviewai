@@ -43,6 +43,85 @@ function stripForSpeech(text) {
     .slice(0, 4000);
 }
 
+const ELEVENLABS_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
+
+/**
+ * ElevenLabs TTS. Resolves when playback ends.
+ * @param {string} text
+ * @param {{ current: HTMLAudioElement | null }} [playingRef]
+ */
+async function speakWithElevenLabs(text, playingRef) {
+  const key = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
+  if (!key || typeof key !== 'string' || !String(key).trim()) {
+    throw new Error('NEXT_PUBLIC_ELEVENLABS_API_KEY missing');
+  }
+  const bodyText = stripForSpeech(text);
+  if (!bodyText) return;
+
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': String(key).trim(),
+      'Content-Type': 'application/json',
+      Accept: 'audio/mpeg',
+    },
+    body: JSON.stringify({
+      text: bodyText,
+      model_id: 'eleven_turbo_v2',
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(err || `ElevenLabs HTTP ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio();
+
+  if (playingRef) {
+    const prev = playingRef.current;
+    if (prev && prev !== audio) {
+      try {
+        prev.pause();
+        prev.src = '';
+      } catch {
+        /* ignore */
+      }
+    }
+    playingRef.current = audio;
+  }
+
+  audio.src = url;
+
+  await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore */
+      }
+      if (playingRef && playingRef.current === audio) {
+        playingRef.current = null;
+      }
+    };
+    audio.onended = () => {
+      cleanup();
+      resolve();
+    };
+    audio.onerror = () => {
+      cleanup();
+      reject(new Error('Audio playback error'));
+    };
+    audio.play().catch((err) => {
+      cleanup();
+      reject(err);
+    });
+  });
+}
+
 const PARSE_FAIL_PHRASE = /could not be fully parsed/i;
 const DEFAULT_REACTION = 'Good attempt! Moving to next question.';
 
@@ -78,9 +157,7 @@ export default function LiveInterviewClient() {
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const questionStartedAtRef = useRef(null);
-
-  const [enVoices, setEnVoices] = useState([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState('');
+  const ttsAudioRef = useRef(null);
 
   const [reactionText, setReactionText] = useState('');
   const [reactionLoading, setReactionLoading] = useState(false);
@@ -93,6 +170,9 @@ export default function LiveInterviewClient() {
 
   const canSpeechIn = supportsSpeechRecognition();
   const canSpeechOut = supportsSpeechSynthesis();
+  const hasElevenLabsKey =
+    typeof process !== 'undefined' && !!String(process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '').trim();
+  const canTtsOutput = hasElevenLabsKey || canSpeechOut;
 
   qIndexRef.current = qIndex;
   questionsRef.current = questions;
@@ -121,6 +201,20 @@ export default function LiveInterviewClient() {
     }
   }, []);
 
+  const stopAllTts = useCallback(() => {
+    const a = ttsAudioRef.current;
+    if (a) {
+      try {
+        a.pause();
+        a.src = '';
+      } catch {
+        /* ignore */
+      }
+      ttsAudioRef.current = null;
+    }
+    window.speechSynthesis?.cancel();
+  }, []);
+
   const stopRecognition = useCallback(() => {
     stopSilenceTimer();
     try {
@@ -133,48 +227,37 @@ export default function LiveInterviewClient() {
   }, [stopSilenceTimer]);
 
   const speak = useCallback(
-    (text) => {
-      if (!canSpeechOut || !text) return;
-      window.speechSynthesis.cancel();
+    async (text) => {
+      if (!text) return;
+      stopAllTts();
+      if (hasElevenLabsKey) {
+        try {
+          await speakWithElevenLabs(text, ttsAudioRef);
+          return;
+        } catch {
+          /* fall through to Web Speech */
+        }
+      }
+      if (!canSpeechOut) return;
       const u = new SpeechSynthesisUtterance(stripForSpeech(text));
       u.rate = 0.85;
       u.pitch = 0.9;
-      const voices = window.speechSynthesis.getVoices() || [];
-      const v = voices.find((vo) => vo.voiceURI === selectedVoiceUri);
-      if (v) u.voice = v;
-      window.speechSynthesis.speak(u);
+      await new Promise((resolve) => {
+        u.onend = resolve;
+        u.onerror = resolve;
+        window.speechSynthesis.speak(u);
+      });
     },
-    [canSpeechOut, selectedVoiceUri]
+    [canSpeechOut, hasElevenLabsKey, stopAllTts]
   );
-
-  const refreshEnVoices = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const all = window.speechSynthesis.getVoices() || [];
-    const en = all.filter((voice) => String(voice.lang || '').toLowerCase().startsWith('en'));
-    setEnVoices(en);
-    setSelectedVoiceUri((prev) => {
-      if (prev && en.some((v) => v.voiceURI === prev)) return prev;
-      const google = en.find((v) => /google/i.test(v.name));
-      return (google || en[0])?.voiceURI ?? '';
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!canSpeechOut) return;
-    refreshEnVoices();
-    const synth = window.speechSynthesis;
-    const onVoices = () => refreshEnVoices();
-    synth.addEventListener('voiceschanged', onVoices);
-    return () => synth.removeEventListener('voiceschanged', onVoices);
-  }, [canSpeechOut, refreshEnVoices]);
 
   useEffect(() => {
     return () => {
       stopRecognition();
-      window.speechSynthesis?.cancel();
+      stopAllTts();
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     };
-  }, [stopRecognition]);
+  }, [stopAllTts, stopRecognition]);
 
   useEffect(() => {
     if (answerInput === 'text') stopRecognition();
@@ -184,14 +267,14 @@ export default function LiveInterviewClient() {
   useEffect(() => {
     if (phase !== 'running') return;
     if (questionDelivery !== 'voice') return;
-    if (!canSpeechOut) return;
+    if (!canTtsOutput) return;
     const q = questions[qIndex];
     if (!q) return;
     if (lastSpokenQuestionRef.current === qIndex) return;
     lastSpokenQuestionRef.current = qIndex;
     const t = typeof q === 'string' ? q : String(q);
-    speak(t);
-  }, [phase, questionDelivery, canSpeechOut, questions, qIndex, speak]);
+    void speak(t);
+  }, [phase, questionDelivery, canTtsOutput, questions, qIndex, speak]);
 
   const resetSilenceTimer = useCallback(() => {
     stopSilenceTimer();
@@ -330,7 +413,7 @@ export default function LiveInterviewClient() {
       clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
     }
-    window.speechSynthesis?.cancel();
+    stopAllTts();
     setReactionText('');
     setReactionLoading(false);
     setAnswerText('');
@@ -353,7 +436,7 @@ export default function LiveInterviewClient() {
     questionStartedAtRef.current = Date.now();
     setQIndex((x) => x + 1);
     setPhase('running');
-  }, [guestMode, router, userId]);
+  }, [guestMode, router, stopAllTts, userId]);
 
   const submitCurrent = useCallback(async () => {
     const qText = typeof questions[qIndex] === 'string' ? questions[qIndex] : String(questions[qIndex]);
@@ -361,7 +444,7 @@ export default function LiveInterviewClient() {
     if (!combined) return;
 
     stopRecognition();
-    window.speechSynthesis.cancel();
+    stopAllTts();
 
     const secs = Math.max(
       0,
@@ -401,10 +484,10 @@ export default function LiveInterviewClient() {
         });
       }
 
-      speak(reaction);
+      await speak(reaction);
     } catch (e) {
       setReactionText(DEFAULT_REACTION);
-      speak(DEFAULT_REACTION);
+      await speak(DEFAULT_REACTION);
       if (userId && !guestMode) {
         try {
           await saveAnswerRemote({
@@ -442,12 +525,13 @@ export default function LiveInterviewClient() {
     selectedRole,
     speak,
     stopRecognition,
+    stopAllTts,
     userId,
   ]);
 
   const skipQuestion = useCallback(async () => {
     stopRecognition();
-    window.speechSynthesis.cancel();
+    stopAllTts();
     if (advanceTimerRef.current) {
       clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
@@ -486,10 +570,10 @@ export default function LiveInterviewClient() {
       advanceTimerRef.current = null;
       goNextOrFinish();
     }, 800);
-  }, [goNextOrFinish, guestMode, saveAnswerRemote, stopRecognition, userId]);
+  }, [goNextOrFinish, guestMode, saveAnswerRemote, stopAllTts, stopRecognition, userId]);
 
   const unsupportedBanner =
-    !canSpeechIn || !canSpeechOut ? (
+    !canSpeechIn || !canTtsOutput ? (
       <div
         style={{
           marginBottom: 16,
@@ -501,7 +585,7 @@ export default function LiveInterviewClient() {
           fontSize: 13,
         }}
       >
-        {!canSpeechIn && !canSpeechOut
+        {!canSpeechIn && !canTtsOutput
           ? 'This browser does not support Web Speech recognition or synthesis. Use Chrome or Edge for full voice features.'
           : !canSpeechIn
             ? 'Speech recognition is not available in this browser. Voice answer mode will be disabled — use Chrome or Edge, or choose Text for answers.'
@@ -617,7 +701,7 @@ export default function LiveInterviewClient() {
 
           <label style={labelStyle}>Question delivery</label>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <ToggleChip active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canSpeechOut}>
+            <ToggleChip active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canTtsOutput}>
               Voice
             </ToggleChip>
             <ToggleChip active={questionDelivery === 'text'} onClick={() => setQuestionDelivery('text')}>
@@ -678,7 +762,7 @@ export default function LiveInterviewClient() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16, alignItems: 'center' }}>
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>Question:</span>
-          <ToggleChip small active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canSpeechOut || isReacting}>
+          <ToggleChip small active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canTtsOutput || isReacting}>
             Voice
           </ToggleChip>
           <ToggleChip small active={questionDelivery === 'text'} onClick={() => setQuestionDelivery('text')} disabled={isReacting}>
@@ -692,36 +776,6 @@ export default function LiveInterviewClient() {
           <ToggleChip small active={answerInput === 'text'} onClick={() => setAnswerInput('text')} disabled={isReacting}>
             Text
           </ToggleChip>
-          <span style={{ width: 16 }} />
-          <label htmlFor="live-voice-select" style={{ color: 'var(--muted)', fontSize: 12 }}>
-            Voice
-          </label>
-          <select
-            id="live-voice-select"
-            value={selectedVoiceUri}
-            onChange={(e) => setSelectedVoiceUri(e.target.value)}
-            disabled={!canSpeechOut || isReacting || enVoices.length === 0}
-            style={{
-              minWidth: 160,
-              maxWidth: 260,
-              padding: '6px 8px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-surface)',
-              color: 'var(--text-primary)',
-              fontSize: 12,
-            }}
-          >
-            {enVoices.length === 0 ? (
-              <option value="">Loading voices…</option>
-            ) : (
-              enVoices.map((v) => (
-                <option key={v.voiceURI} value={v.voiceURI}>
-                  {v.name}
-                </option>
-              ))
-            )}
-          </select>
         </div>
 
         <div
