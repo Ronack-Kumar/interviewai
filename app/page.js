@@ -2047,37 +2047,31 @@ export default function Page() {
               aria-label="Send feedback"
               title="Send feedback or report a bug"
               onClick={() => setFeedbackModalOpen(true)}
-              style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               💬
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Feedback</span>
             </button>
             <button
               type="button"
               className="theme-toggle-btn"
               aria-label="Toggle theme"
-              title="Toggle light / dark theme"
+              title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={() => {
                 const next = themeMode === 'dark' ? 'light' : 'dark';
                 applyTheme(next);
                 setThemeMode(next);
               }}
-              style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               {themeMode === 'light' ? '🌙' : '☀️'}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Theme</span>
             </button>
             <button
               type="button"
               className="settings-btn"
-              aria-label="Settings"
+              aria-label="Open settings"
               aria-expanded={settingsOpen}
               title="Settings"
               onClick={() => setSettingsOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <IconGear />
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Settings</span>
             </button>
           </div>
         </div>
