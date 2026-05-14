@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -2042,6 +2043,14 @@ export default function Page() {
             ) : null}
           </div>
           <div className="main__top-actions">
+            <Link
+              href="/live-interview"
+              className="btn btn-primary"
+              style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
+              title="Voice & text live mock interview"
+            >
+              Live Interview
+            </Link>
             <button
               type="button"
               className="theme-toggle-btn"
