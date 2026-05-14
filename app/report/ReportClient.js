@@ -193,10 +193,11 @@ export default function ReportClient() {
                 feedback: parsed.feedback ?? null,
                 ideal_answer: parsed.idealAnswer ?? '',
               })
-              .eq('id', answerRow.id)
-              .eq('user_id', user.id)
-              .eq('session_id', sessionId);
-            if (updateError) continue;
+              .eq('id', answerRow.id);
+            if (updateError) {
+              console.error('Supabase update error:', updateError);
+              continue;
+            }
           }
         } catch {
           continue;
