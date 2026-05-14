@@ -2,7 +2,7 @@
 // Primary: Groq | Fallback: Google Gemini Flash
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 const SYSTEM_PROMPTS = {
   hr: `You are an expert HR interview coach specialising in behavioural interviews.
@@ -98,8 +98,25 @@ async function callGemini(systemPrompt, userContent) {
 
   const data = await res.json();
   console.log('Gemini full response:', JSON.stringify(data).slice(0, 500));
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No text from Gemini');
+
+  if (!res.ok) {
+    const msg = data?.error?.message || JSON.stringify(data).slice(0, 300);
+    throw new Error(`Gemini HTTP ${res.status}: ${msg}`);
+  }
+
+  const parts = data?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts)
+    ? parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('')
+    : '';
+  if (!text) {
+    const reason = data?.candidates?.[0]?.finishReason || data?.promptFeedback || '';
+    throw new Error(
+      'No text from Gemini' +
+        (reason ? ` (${JSON.stringify(reason).slice(0, 200)})` : '') +
+        ': ' +
+        JSON.stringify(data).slice(0, 400)
+    );
+  }
   return text;
 }
 
