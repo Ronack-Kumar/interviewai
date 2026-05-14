@@ -38,17 +38,31 @@ export async function POST(request) {
   const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
 
   function safeParseJSON(text) {
-    const clean = text
+    let clean = text
       .replace(/```json|```/g, '')
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
       .trim();
+
+    // Remove all control characters except \n, \r, \t
+    clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+    // Fix bad backslash escapes
+    clean = clean.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+
+    // Replace literal newlines inside strings with \n
+    clean = clean.replace(/"([^"]*)"/g, (match) => {
+      return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    });
+
     try {
       return JSON.parse(clean);
     } catch (parseErr) {
       const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
       if (!match) throw new Error('No valid JSON found in response');
-      return JSON.parse(match[1]);
+      try {
+        return JSON.parse(match[1]);
+      } catch {
+        throw new Error('Failed to parse JSON: ' + parseErr.message);
+      }
     }
   }
 
