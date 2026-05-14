@@ -362,6 +362,7 @@ export default function Page() {
 
   const [toast, setToast] = useState({ msg: '', show: false, err: false });
   const [streak, setStreak] = useState(1);
+  const [difficulty, setDifficulty] = useState('All');
 
   const [answerSavedFlash, setAnswerSavedFlash] = useState(false);
   const [codingOutputOpen, setCodingOutputOpen] = useState(false);
@@ -405,10 +406,13 @@ export default function Page() {
   }, [cameraEnabled]);
 
   const isCoding = mode === 'coding';
+  const filteredProblems = difficulty === 'All'
+    ? codingProblems
+    : codingProblems.filter(p => p.difficulty === difficulty);
   const questions = currentQuestions;
   const currentTextQuestion = currentQuestions[questionIndex] || '';
-  const currentProblem = codingProblems[questionIndex] || null;
-  const totalQ = isCoding ? codingProblems.length || 8 : currentQuestions.length || 8;
+  const currentProblem = filteredProblems[questionIndex] || null;
+  const totalQ = isCoding ? filteredProblems.length || 8 : currentQuestions.length || 8;
   const charCount = (answer + speechInterim).length;
   const submittedCount = answerSlots.filter((s) => s.submitted).length;
   const progressPct =
@@ -1835,6 +1839,23 @@ export default function Page() {
           </>
         )}
 
+        {mode === 'coding' && (
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">DIFFICULTY</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {['All', 'Easy', 'Medium', 'Hard'].map(d => (
+                <button
+                  key={d}
+                  className={`pack-btn${difficulty === d ? ' active' : ''}`}
+                  onClick={() => setDifficulty(d)}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="sidebar__section-label">Session</div>
         <div className="stats-stack">
           <div className="stat-line">
@@ -1871,6 +1892,19 @@ export default function Page() {
             </div>
           ) : null}
         </div>
+
+        <button
+          type="button"
+          className="toggle-btn"
+          style={{ width: '100%', marginTop: 8 }}
+          aria-expanded={resumeExpanded}
+          onClick={() => setResumeExpanded((x) => !x)}
+        >
+          <span>📄 Resume</span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>
+            {resumeExpanded ? '−' : '+'}
+          </span>
+        </button>
 
         <div className="sidebar__user">
           <div className="sidebar__user-name" title={authUser?.email || ''}>
@@ -2942,14 +2976,6 @@ export default function Page() {
       </div>
 
       <div className={`resume-sidebar ${resumeExpanded ? 'resume-sidebar--open' : ''}`}>
-        <button
-          type="button"
-          className="resume-sidebar__toggle"
-          aria-expanded={resumeExpanded}
-          onClick={() => setResumeExpanded((x) => !x)}
-        >
-          📄 Resume
-        </button>
         <div className="resume-sidebar__body">
           <input
             ref={resumeFileInputRef}

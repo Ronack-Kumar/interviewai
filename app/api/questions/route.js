@@ -36,34 +36,21 @@ export async function POST(request) {
   };
 
   const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
-  const topicPools = {
-    technical: [
-      'indexing','caching','load balancing','microservices','REST vs GraphQL','CAP theorem',
-      'SOLID principles','design patterns','CI/CD','Docker','Kubernetes','database sharding',
-      'event-driven architecture','message queues','WebSockets','OAuth','JWT','SQL optimization',
-      'NoSQL tradeoffs','distributed systems','rate limiting','API gateway','memory management',
-      'garbage collection','concurrency','threading','recursion','dynamic programming','system design',
-      'scalability'
-    ],
-    hr: [
-      'conflict resolution','leadership','failure story','team collaboration','time management',
-      'feedback handling','career goals','motivation','work under pressure','difficult colleague',
-      'project ownership','cross-functional work','mentoring','ambiguity handling','initiative',
-      'communication','prioritization','remote work','learning agility','stakeholder management'
-    ],
-    case: [
-      'market sizing','pricing strategy','unit economics','customer segmentation','growth strategy',
-      'retention analysis','churn reduction','go-to-market','competitive analysis','profitability',
-      'cost optimization','channel strategy','product launch','international expansion','ops bottlenecks',
-      'forecasting','risk analysis','supply chain','north star metric','experimentation'
-    ],
-    stress: [
-      'pressure handling','rapid prioritization','defensive criticism','ethical dilemma','scope challenge',
-      'deadline shock','resource constraint','contradictory requirements','stakeholder conflict','self-awareness',
-      'decision under uncertainty','communication under stress','pushback handling','ownership challenge',
-      'unexpected failure','ambiguity pressure','role fit challenge','career gap defense','tradeoff defense','resilience'
-    ],
-  };
+
+  function safeParseJSON(text) {
+    const clean = text
+      .replace(/```json|```/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+      .trim();
+    try {
+      return JSON.parse(clean);
+    } catch (parseErr) {
+      const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+      if (!match) throw new Error('No valid JSON found in response');
+      return JSON.parse(match[1]);
+    }
+  }
 
   // ── Coding round: structured problems ─────────────────────────────
   if (mode === 'coding') {
@@ -109,15 +96,15 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
       });
 
       const data = await groqRes.json();
-      console.log('Gemini raw response:', JSON.stringify(data).slice(0, 500));
-      const text = data?.choices?.[0]?.message?.content 
+      console.log('Groq raw response:', JSON.stringify(data).slice(0, 500));
+      const text = data?.choices?.[0]?.message?.content
         || data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
-        console.log('Gemini no text found, raw:', JSON.stringify(data).slice(0, 300));
+        console.log('Groq no text found, raw:', JSON.stringify(data).slice(0, 300));
         throw new Error('Invalid response from LLM');
       }
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
+
+      const parsed = safeParseJSON(text);
 
       if (!Array.isArray(parsed) || parsed.length === 0) {
         throw new Error('Response was not a valid array');
@@ -146,18 +133,20 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
 Make questions varied in difficulty and topic. Avoid repetition.`;
+
   let userPrompt = `Generate 8 ${modeDescriptions[mode] || 'interview'} questions for a ${roleLabel} interview`;
 
   if (pack && pack !== 'general' && packDescriptions[pack]) {
     userPrompt += ` specifically for a ${packDescriptions[pack]} interview`;
   }
-  
+
   if (safeResumeText.trim().length > 50) {
     userPrompt += `.\n\nThe candidate's resume/background:\n${safeResumeText}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
   } else {
     userPrompt += '.';
   }
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
+
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -177,15 +166,15 @@ Make questions varied in difficulty and topic. Avoid repetition.`;
     });
 
     const data = await groqRes.json();
-    console.log('Gemini raw response:', JSON.stringify(data).slice(0, 500));
-    const text = data?.choices?.[0]?.message?.content 
+    console.log('Groq raw response:', JSON.stringify(data).slice(0, 500));
+    const text = data?.choices?.[0]?.message?.content
       || data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
-      console.log('Gemini no text found, raw:', JSON.stringify(data).slice(0, 300));
+      console.log('Groq no text found, raw:', JSON.stringify(data).slice(0, 300));
       throw new Error('Invalid response from LLM');
     }
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+
+    const parsed = safeParseJSON(text);
 
     if (!Array.isArray(parsed) || parsed.length === 0) {
       throw new Error('Response was not a valid array');
