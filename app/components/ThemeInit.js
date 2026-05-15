@@ -17,9 +17,9 @@ export default function ThemeInit() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('theme');
-      applyTheme(raw === 'light' ? 'light' : 'dark');
+      applyTheme(raw === 'dark' ? 'dark' : 'light');
     } catch {
-      applyTheme('dark');
+      applyTheme('light');
     }
   }, []);
   return null;

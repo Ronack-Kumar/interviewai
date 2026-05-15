@@ -409,7 +409,7 @@ export default function InterviewApp() {
   const [reconnectingCamera, setReconnectingCamera] = useState(false);
   const [faceLookToast, setFaceLookToast] = useState(false);
   const [sessionTimerEndAt, setSessionTimerEndAt] = useState(null);
-  const [themeMode, setThemeMode] = useState('dark');
+  const [themeMode, setThemeMode] = useState('light');
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState('Bug Report');
   const [feedbackDesc, setFeedbackDesc] = useState('');
@@ -717,8 +717,8 @@ export default function InterviewApp() {
   }, [router]);
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    setThemeMode(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+    applyTheme('light');
+    setThemeMode('light');
   }, []);
 
   useEffect(() => {
@@ -2448,7 +2448,7 @@ export default function InterviewApp() {
             ) : null}
             <Link
               href="/rooms"
-              className="btn btn-primary"
+              className="btn btn-ghost"
               style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
               title="Peer practice rooms with Supabase Realtime"
             >
@@ -2456,7 +2456,7 @@ export default function InterviewApp() {
             </Link>
             <Link
               href="/live-interview"
-              className="btn btn-primary"
+              className="btn btn-ghost"
               style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
               title="Voice & text live mock interview"
             >
