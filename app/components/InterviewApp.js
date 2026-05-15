@@ -868,6 +868,9 @@ export default function InterviewApp() {
 
   useEffect(() => {
     return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       if (resumeConfirmTimerRef.current) clearTimeout(resumeConfirmTimerRef.current);
       if (answerFlashTimerRef.current) clearTimeout(answerFlashTimerRef.current);
     };
@@ -1606,6 +1609,10 @@ export default function InterviewApp() {
   ]);
 
   const goNext = useCallback(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setTtsSpeaking(false);
     if (questionIndex < totalQ - 1) setQuestionIndex((i) => i + 1);
   }, [questionIndex, totalQ]);
 
@@ -1614,6 +1621,10 @@ export default function InterviewApp() {
   }, [goNext]);
 
   const handleSkipFollowup = useCallback(async () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setTtsSpeaking(false);
     if (isCoding) return;
     if (followupPhase === 'idle') return;
 
@@ -1780,6 +1791,10 @@ export default function InterviewApp() {
   }, [handleSubmit]);
 
   const goPrev = useCallback(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setTtsSpeaking(false);
     if (questionIndex > 0) setQuestionIndex((i) => i - 1);
   }, [questionIndex]);
 
@@ -3304,6 +3319,10 @@ export default function InterviewApp() {
                 type="button"
                 className="btn btn-ghost controls-row__clear"
                 onClick={() => {
+                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                  }
+                  setTtsSpeaking(false);
                   setAnswer('');
                   setSpeechInterim('');
                   if (captionOn) setCaptionText('');
