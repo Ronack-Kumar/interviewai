@@ -23,6 +23,55 @@ const ROLES = [
   'System Design',
 ];
 
+const INTERVIEWER_PERSONA_OPTIONS = [
+  { id: 'standard', badge: '🎯 Standard', title: 'Standard', subtitle: 'Balanced, professional' },
+  {
+    id: 'aggressive_faang',
+    badge: '😤 Aggressive FAANG',
+    title: 'Aggressive FAANG',
+    subtitle: 'Challenges every answer, asks hard follow-ups, interrupts weak answers',
+  },
+  {
+    id: 'friendly_startup',
+    badge: '🤝 Friendly Startup CTO',
+    title: 'Friendly Startup CTO',
+    subtitle: 'Conversational, encouraging, asks about thought process',
+  },
+  {
+    id: 'silent_skeptical',
+    badge: '😶 Silent & Skeptical',
+    title: 'Silent & Skeptical',
+    subtitle: 'Minimal reactions, long pauses, makes candidate uncomfortable',
+  },
+  {
+    id: 'strict_hr',
+    badge: '📋 Strict HR',
+    title: 'Strict HR',
+    subtitle: 'Focuses on behavior, structure, STAR format, flags vague answers',
+  },
+  {
+    id: 'tcs_infosys',
+    badge: '🇮🇳 TCS/Infosys Style',
+    title: 'TCS/Infosys Style',
+    subtitle: 'Formal, process-oriented, asks about projects and basics',
+  },
+];
+
+function interviewerPersonaFlavor(personaId) {
+  const flavors = {
+    aggressive_faang: 'The interviewer looks unimpressed.',
+    friendly_startup: 'The interviewer nods encouragingly.',
+    silent_skeptical: 'The interviewer stares at you blankly.',
+    strict_hr: 'The interviewer has a checklist ready.',
+    tcs_infosys: 'The interviewer adjusts their formal tie.',
+  };
+  return flavors[personaId] || '';
+}
+
+function interviewerPersonaBadge(personaId) {
+  return INTERVIEWER_PERSONA_OPTIONS.find((p) => p.id === personaId)?.badge ?? '🎯 Standard';
+}
+
 const FALLBACK = {
   technical: [
     'Explain the difference between SQL and NoSQL databases.',
@@ -286,6 +335,7 @@ export default function Page() {
   const router = useRouter();
   const [mode, setModeState] = useState('technical');
   const [selectedRole, setSelectedRole] = useState('Full Stack Developer');
+  const [interviewerPersona, setInterviewerPersona] = useState('standard');
   const [activePack, setActivePack] = useState('general');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [currentQuestions, setCurrentQuestions] = useState([]);
@@ -517,6 +567,7 @@ export default function Page() {
               pack: activePack,
               resumeText: rt || '',
               role: selectedRole,
+              persona: interviewerPersona,
               difficulty: 'medium',
             }
             : {
@@ -524,6 +575,7 @@ export default function Page() {
               pack: activePack,
               resumeText: rt || '',
               role: selectedRole,
+              persona: interviewerPersona,
             };
         console.log('[MockPrep] POST /api/questions payload:', {
           mode: payload.mode,
@@ -607,7 +659,7 @@ export default function Page() {
         setControlsDisabled(false);
       }
     },
-    [mode, activePack, resumeText, selectedRole, clearFeedback, showToast, bumpSessionCounter, timerPreset]
+    [mode, activePack, resumeText, selectedRole, interviewerPersona, clearFeedback, showToast, bumpSessionCounter, timerPreset]
   );
 
   const setMode = useCallback((m) => {
@@ -808,7 +860,7 @@ export default function Page() {
     if (!authReady || (!userId && !guestMode)) return;
     if (setupModalOpen) return;
     loadQuestions();
-  }, [mode, activePack, selectedRole, timerPreset, loadQuestions, authReady, userId, guestMode, setupModalOpen]);
+  }, [mode, activePack, selectedRole, timerPreset, loadQuestions, authReady, userId, guestMode, setupModalOpen, interviewerPersona]);
 
   useEffect(() => {
     document.body.classList.toggle('high-contrast', highContrast);
@@ -1431,6 +1483,7 @@ export default function Page() {
           answer: aStr,
           mode,
           role: selectedRole,
+          persona: interviewerPersona,
         }),
       });
       const parsed = await res.json();
@@ -1505,6 +1558,7 @@ export default function Page() {
     mode,
     questionHint,
     selectedRole,
+    interviewerPersona,
     showToast,
     userId,
     codeBody,
@@ -1657,6 +1711,7 @@ export default function Page() {
           answer: textAnswer,
           mode,
           role: selectedRole,
+          persona: interviewerPersona,
         }),
         signal: ac.signal,
       });
@@ -1712,6 +1767,7 @@ export default function Page() {
     showToast,
     mode,
     selectedRole,
+    interviewerPersona,
     currentTextQuestion,
     stashedMainAnswer,
     followupQuestionText,
@@ -2551,6 +2607,19 @@ export default function Page() {
                       <span className={`diff-badge ${diffClass}`}>{currentProblem.difficulty}</span>
                     )}
                   </div>
+                  {interviewerPersonaFlavor(interviewerPersona) ? (
+                    <p
+                      style={{
+                        margin: '6px 0 10px',
+                        fontSize: 13,
+                        fontStyle: 'italic',
+                        color: 'var(--muted)',
+                        opacity: 0.95,
+                      }}
+                    >
+                      {interviewerPersonaFlavor(interviewerPersona)}
+                    </p>
+                  ) : null}
                   <hr className="problem-divider" />
                   <div className="q-progress-track" aria-hidden>
                     <div className="q-progress-fill" style={{ width: `${progressPct}%` }} />
@@ -2772,6 +2841,30 @@ export default function Page() {
               <div className="coding-bottom-strip">
                 <div className="q-block coding-workspace-actions" style={{ padding: '10px 1.5rem 0' }}>
                   <div className="q-block__head q-block__head--nav">
+                    <div
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {interviewerPersonaBadge(interviewerPersona)}
+                      </span>
+                    </div>
                     <div className="q-nav-row" role="navigation" aria-label="Question navigation">
                       <button
                         type="button"
@@ -2955,6 +3048,30 @@ export default function Page() {
               <div className="interview-layout__right">
                 <div className="interview-layout__right-inner">
                   <div className="q-block__head q-block__head--nav q-block__head--tools-only">
+                    <div
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-surface)',
+                          color: 'var(--text-primary)',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {interviewerPersonaBadge(interviewerPersona)}
+                      </span>
+                    </div>
                     <div className="q-actions">
                       <button
                         type="button"
@@ -3026,6 +3143,20 @@ export default function Page() {
                       currentTextQuestion || '—'
                     )}
                   </div>
+
+                  {!isCoding && interviewerPersonaFlavor(interviewerPersona) ? (
+                    <p
+                      style={{
+                        margin: '8px 0 0',
+                        fontSize: 13,
+                        fontStyle: 'italic',
+                        color: 'var(--muted)',
+                        opacity: 0.95,
+                      }}
+                    >
+                      {interviewerPersonaFlavor(interviewerPersona)}
+                    </p>
+                  ) : null}
 
                   {!isCoding && followupPhase === 'loading' ? (
                     <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--muted, #94a3b8)' }}>
@@ -3344,6 +3475,42 @@ export default function Page() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', marginBottom: 10, fontSize: 13, color: 'var(--muted)' }}>
+              Interviewer Style
+            </label>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(158px, 1fr))',
+                gap: 10,
+              }}
+            >
+              {INTERVIEWER_PERSONA_OPTIONS.map((p) => {
+                const active = interviewerPersona === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setInterviewerPersona(p.id)}
+                    style={{
+                      textAlign: 'left',
+                      padding: '12px 12px',
+                      borderRadius: 10,
+                      border: active ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      background: active ? 'var(--accent-muted)' : 'var(--bg-surface)',
+                      cursor: 'pointer',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 4, lineHeight: 1.25 }}>{p.badge}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.35 }}>{p.subtitle}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div style={{ marginBottom: 24 }}>

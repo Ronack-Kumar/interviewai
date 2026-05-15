@@ -41,6 +41,36 @@ Respond ONLY with a JSON object (no markdown, no extra text) in this exact forma
 Do not include star_score.`,
 };
 
+const VALID_PERSONAS = new Set([
+  'standard',
+  'aggressive_faang',
+  'friendly_startup',
+  'silent_skeptical',
+  'strict_hr',
+  'tcs_infosys',
+]);
+
+function normalizePersona(raw) {
+  const id = typeof raw === 'string' ? raw.trim() : '';
+  return VALID_PERSONAS.has(id) ? id : 'standard';
+}
+
+const PERSONA_FEEDBACK_ADDENDUM = {
+  aggressive_faang: `Interviewer persona — Aggressive FAANG bar: calibrate to an elite hiring standard. Be harsher and more specific—call out missing edge cases, shallow trade-off analysis, and hand-wavy claims. Penalize vagueness in scores and written feedback. Minimize praise unless clearly earned.`,
+  friendly_startup: `Interviewer persona — Friendly startup CTO: sound encouraging while staying honest. Acknowledge good instincts where present, then name gaps constructively with concrete next steps. Avoid insults or dismissive tone.`,
+  silent_skeptical: `Interviewer persona — Silent & skeptical: keep feedback blunt and economical—minimal warmth, minimal hedging. State issues directly; little praise; mostly matter-of-fact critique.`,
+  strict_hr: `Interviewer persona — Strict HR: explicitly evaluate STAR structure where applicable (Situation, Task, Action, Result). Flag missing components, vague metrics, and unstructured answers in feedback and scoreReason.`,
+  tcs_infosys: `Interviewer persona — TCS/Infosys style: use a formal, process-oriented tone. Emphasize fundamentals, project specifics, ownership, and clarity of implementation details in your feedback.`,
+};
+
+function buildFeedbackSystem(mode, persona) {
+  const base = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.technical;
+  const p = normalizePersona(persona);
+  const add = PERSONA_FEEDBACK_ADDENDUM[p];
+  if (!add) return base;
+  return `${base}\n\n${add}`;
+}
+
 const MAX_QUESTION = 12000;
 const MAX_ANSWER = 50000;
 
@@ -148,7 +178,7 @@ async function callGemini(systemPrompt, userContent) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { question, answer, mode, role } = body;
+  const { question, answer, mode, role, persona: personaRaw } = body;
 
   if (!question || !answer) {
     return Response.json({ error: 'question and answer are required' }, { status: 400 });
@@ -160,11 +190,13 @@ export async function POST(request) {
     return Response.json({ error: `Answer too long — maximum ${MAX_ANSWER} characters` }, { status: 400 });
   }
 
-  const systemPrompt = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.technical;
+  const persona = normalizePersona(personaRaw);
+  const systemPrompt = buildFeedbackSystem(mode, persona);
   const roleLabel = typeof role === 'string' && role.trim() ? role.trim() : 'Software Engineer';
 
   const userContent = `Interview type: ${mode || 'technical'}
 Target role: ${roleLabel}
+Interviewer persona: ${persona}
 Question / problem statement:
 ${question}
 

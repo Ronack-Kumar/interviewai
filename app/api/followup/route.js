@@ -9,12 +9,46 @@ const GEMINI_MODEL_TRY_ORDER = [
   'gemini-3-flash-preview',
 ];
 
-const FOLLOWUP_SYSTEM = `You are a senior interviewer. Based on the candidate's answer, generate 1 sharp follow-up question that probes deeper. If the answer is very weak or off-topic, ask a simpler clarifying question. If the answer is strong, challenge them with a harder edge case. Return ONLY the follow-up question text, nothing else. No explanation, no prefix.`;
+const FOLLOWUP_CORE = `You are a senior interviewer. Based on the candidate's answer, generate 1 sharp follow-up question that probes deeper. If the answer is very weak or off-topic, ask a simpler clarifying question. If the answer is strong, challenge them with a harder edge case. Return ONLY the follow-up question text, nothing else. No explanation, no prefix.`;
+
+const VALID_PERSONAS = new Set([
+  'standard',
+  'aggressive_faang',
+  'friendly_startup',
+  'silent_skeptical',
+  'strict_hr',
+  'tcs_infosys',
+]);
+
+function normalizePersona(raw) {
+  const id = typeof raw === 'string' ? raw.trim() : '';
+  return VALID_PERSONAS.has(id) ? id : 'standard';
+}
+
+const PERSONA_FOLLOWUP_VOICE = {
+  aggressive_faang:
+    'You are an aggressive FAANG interviewer. Challenge the answer hard. Ask a difficult follow-up that exposes gaps.',
+  friendly_startup:
+    'You are a friendly startup CTO. Ask a curious, encouraging follow-up.',
+  silent_skeptical:
+    'You are a skeptical interviewer. Ask a short, pointed follow-up with no warmth.',
+  strict_hr:
+    'You are a strict HR interviewer. If STAR structure was missing, ask them to restructure their answer.',
+  tcs_infosys:
+    'You are a formal TCS interviewer. Ask a straightforward follow-up about implementation details.',
+};
+
+function buildFollowupSystem(persona) {
+  const p = normalizePersona(persona);
+  const voice = PERSONA_FOLLOWUP_VOICE[p];
+  if (!voice) return FOLLOWUP_CORE;
+  return `${FOLLOWUP_CORE}\n\n${voice}`;
+}
 
 const MAX_QUESTION = 12000;
 const MAX_ANSWER = 50000;
 
-async function callGroq(userContent) {
+async function callGroq(systemPrompt, userContent) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) throw new Error('GROQ_API_KEY not set');
 
@@ -27,7 +61,7 @@ async function callGroq(userContent) {
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: FOLLOWUP_SYSTEM },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
       temperature: 0.4,
@@ -55,7 +89,7 @@ function geminiShouldTryNextModel(res, errorMessage) {
   return /not found|is not found|does not exist|was not found|UNAVAILABLE_MODEL|MODEL_NOT_FOUND/i.test(m);
 }
 
-async function callGemini(userContent) {
+async function callGemini(systemPrompt, userContent) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
 
@@ -67,7 +101,7 @@ async function callGemini(userContent) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: FOLLOWUP_SYSTEM }] },
+        system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: userContent }] }],
         generationConfig,
       }),
@@ -109,7 +143,7 @@ function normalizeFollowup(text) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { question, answer, mode, role } = body;
+  const { question, answer, mode, role, persona: personaRaw } = body;
 
   if (!question || !answer) {
     return Response.json({ error: 'question and answer are required' }, { status: 400 });
@@ -121,10 +155,13 @@ export async function POST(request) {
     return Response.json({ error: `Answer too long — maximum ${MAX_ANSWER} characters` }, { status: 400 });
   }
 
+  const persona = normalizePersona(personaRaw);
+  const systemPrompt = buildFollowupSystem(persona);
   const roleLabel = typeof role === 'string' && role.trim() ? role.trim() : 'Software Engineer';
 
   const userContent = `Interview type: ${mode || 'technical'}
 Target role: ${roleLabel}
+Interviewer persona: ${persona}
 Question:
 ${question}
 
@@ -134,12 +171,12 @@ ${answer}`;
   let text;
 
   try {
-    text = await callGroq(userContent);
+    text = await callGroq(systemPrompt, userContent);
     console.log('✅ Follow-up served by Groq');
   } catch (groqErr) {
     console.warn('⚠️ Groq failed:', groqErr.message, '— trying Gemini...');
     try {
-      text = await callGemini(userContent);
+      text = await callGemini(systemPrompt, userContent);
       console.log('✅ Follow-up served by Gemini (fallback)');
     } catch (geminiErr) {
       console.error('❌ Both APIs failed:', geminiErr.message);

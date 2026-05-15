@@ -121,9 +121,42 @@ async function callAI(params) {
   }
 }
 
+const VALID_PERSONAS = new Set([
+  'standard',
+  'aggressive_faang',
+  'friendly_startup',
+  'silent_skeptical',
+  'strict_hr',
+  'tcs_infosys',
+]);
+
+function normalizePersona(raw) {
+  const id = typeof raw === 'string' ? raw.trim() : '';
+  return VALID_PERSONAS.has(id) ? id : 'standard';
+}
+
+function personaQuestionModifier(persona) {
+  switch (persona) {
+    case 'aggressive_faang':
+      return `\n\nInterviewer persona — Aggressive FAANG: bias toward harder questions, edge cases, scalability, failure modes, and system design at large scale. Avoid softball prompts.`;
+    case 'friendly_startup':
+      return `\n\nInterviewer persona — Friendly startup CTO: favor practical, real-world scenarios, shipping trade-offs, and “how would you approach this on a small team” angles. Keep questions grounded but still substantive.`;
+    case 'silent_skeptical':
+      return `\n\nInterviewer persona — Silent & skeptical: keep questions terse and slightly under-specified; minimal setup; no warm framing; let the candidate fill gaps.`;
+    case 'strict_hr':
+      return `\n\nInterviewer persona — Strict HR: behavioral and STAR-oriented prompts; ask for specific situations, actions, metrics, and reflections; avoid vague hypotheticals without asking for concrete past examples.`;
+    case 'tcs_infosys':
+      return `\n\nInterviewer persona — TCS/Infosys style: formal, process-oriented; mix fundamentals (OOP, DBMS, SDLC, basics) with project walk-through and role-aligned enterprise questions.`;
+    default:
+      return '';
+  }
+}
+
 export async function POST(request) {
   const body = await request.json();
-  const { mode, pack, resumeText, role } = body;
+  const { mode, pack, resumeText, role, persona: personaRaw } = body;
+  const persona = normalizePersona(personaRaw);
+  const personaBlock = personaQuestionModifier(persona);
 
   if (!mode) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
@@ -172,7 +205,7 @@ Each element must be an object with these keys:
 Cover these topics, exactly one problem each — no two problems may share the same topic:
 arrays, strings, linked lists, trees, dynamic programming, sorting.
 Each problem JSON object must implicitly reflect its distinct topic (vary problem statements accordingly).
-No plagiarism — original statements.`;
+No plagiarism — original statements.${personaBlock}`;
 
     let userPrompt = `Generate 6 coding interview problems for a ${roleLabel} interview. Tailor difficulty mix: 1 Easy, 3 Medium, 2 Hard.
 Enforce one unique topic per problem from the fixed list (arrays, strings, linked lists, trees, dynamic programming, sorting) — no duplicates.`;
@@ -221,7 +254,7 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
   const systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
-Make questions varied in difficulty and topic. Avoid repetition.`;
+Make questions varied in difficulty and topic. Avoid repetition.${personaBlock}`;
 
   let userPrompt = `Generate 8 ${modeDescriptions[mode] || 'interview'} questions for a ${roleLabel} interview`;
 
