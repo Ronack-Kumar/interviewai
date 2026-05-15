@@ -16,6 +16,8 @@ const HIRING_SYSTEM = `You are a senior hiring manager. Based on the candidate's
   "communication": { "rating": "Strong" | "Good" | "Weak", "comment": "<one or two sentences>" },
   "technical_depth": { "rating": "Strong" | "Good" | "Weak", "comment": "<one or two sentences>" },
   "confidence": { "rating": "Strong" | "Good" | "Weak", "comment": "<one or two sentences>" },
+  "key_strength": "<optional one sentence>",
+  "critical_weakness": "<optional one sentence>",
   "summary": "<2–4 sentences explaining the verdict for a hiring committee>"
 }
 Use double quotes for all JSON keys and string values. No markdown, no code fences, no text before or after the JSON object.`;
@@ -45,11 +47,21 @@ function clampDim(obj) {
   return { rating, comment };
 }
 
+function optSentence(val, max) {
+  if (typeof val !== 'string') return undefined;
+  const t = val.trim().slice(0, max);
+  return t || undefined;
+}
+
 function normalizeHiring(parsed) {
   const verdict = VERDICTS.has(parsed?.verdict) ? parsed.verdict : 'Borderline';
   let overall = Number(parsed?.overall_score);
   if (!Number.isFinite(overall)) overall = 5;
   overall = Math.min(10, Math.max(1, overall));
+  const keyStrength =
+    optSentence(parsed?.key_strength, 800) ?? optSentence(parsed?.keyStrength, 800);
+  const criticalWeakness =
+    optSentence(parsed?.critical_weakness, 800) ?? optSentence(parsed?.criticalWeakness, 800);
   return {
     verdict,
     overall_score: overall,
@@ -57,6 +69,8 @@ function normalizeHiring(parsed) {
     technical_depth: clampDim(parsed?.technical_depth),
     confidence: clampDim(parsed?.confidence),
     summary: typeof parsed?.summary === 'string' ? parsed.summary.trim().slice(0, 1200) : '',
+    ...(keyStrength ? { key_strength: keyStrength } : {}),
+    ...(criticalWeakness ? { critical_weakness: criticalWeakness } : {}),
   };
 }
 

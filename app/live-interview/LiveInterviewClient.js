@@ -939,7 +939,7 @@ export default function LiveInterviewClient() {
             ) : null}
             {hiringDecision && !hiringDecisionLoading ? (
               <>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'baseline', marginBottom: 10 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 10 }}>
                   <span
                     style={{
                       fontSize: 12,
@@ -952,16 +952,34 @@ export default function LiveInterviewClient() {
                     Verdict
                   </span>
                   <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color:
-                        hiringDecision.verdict === 'Strong Hire' || hiringDecision.verdict === 'Hire'
-                          ? 'var(--success)'
-                          : hiringDecision.verdict === 'Borderline'
-                            ? 'var(--warning)'
-                            : 'var(--error)',
-                    }}
+                    style={(() => {
+                      const v = hiringDecision.verdict;
+                      const base = {
+                        fontSize: 20,
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        display: 'inline-block',
+                        borderStyle: 'solid',
+                        borderWidth: 2,
+                      };
+                      if (v === 'Strong Hire')
+                        return { ...base, fontWeight: 800, color: '#15803d', borderColor: '#16a34a', backgroundColor: 'transparent' };
+                      if (v === 'Hire')
+                        return { ...base, fontWeight: 700, color: '#16a34a', borderColor: '#22c55e', backgroundColor: 'transparent' };
+                      if (v === 'Borderline')
+                        return { ...base, fontWeight: 700, color: '#c2410c', borderColor: '#f97316', backgroundColor: 'transparent' };
+                      if (v === 'No Hire')
+                        return { ...base, fontWeight: 700, color: '#dc2626', borderColor: '#ef4444', backgroundColor: 'transparent' };
+                      if (v === 'Strong No Hire')
+                        return {
+                          ...base,
+                          fontWeight: 700,
+                          color: '#ffffff',
+                          borderColor: '#7f1d1d',
+                          backgroundColor: '#991b1b',
+                        };
+                      return { ...base, fontWeight: 700, color: '#c2410c', borderColor: '#f97316', backgroundColor: 'transparent' };
+                    })()}
                   >
                     {hiringDecision.verdict}
                   </span>
@@ -984,6 +1002,38 @@ export default function LiveInterviewClient() {
                   <strong>Confidence</strong> — {hiringDecision.confidence?.rating}
                   <div style={{ margin: '4px 0 0', color: 'var(--muted)' }}>{hiringDecision.confidence?.comment}</div>
                 </div>
+                {(hiringDecision.key_strength || hiringDecision.keyStrength) ? (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      backgroundColor: 'rgba(34, 197, 94, 0.22)',
+                      border: '1px solid #22c55e',
+                      color: '#166534',
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    ✅ Key strength: {hiringDecision.key_strength || hiringDecision.keyStrength}
+                  </div>
+                ) : null}
+                {(hiringDecision.critical_weakness || hiringDecision.criticalWeakness) ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                      border: '1px solid #ef4444',
+                      color: '#991b1b',
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    ❌ Critical weakness: {hiringDecision.critical_weakness || hiringDecision.criticalWeakness}
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>
