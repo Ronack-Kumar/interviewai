@@ -346,6 +346,10 @@ export default function Page() {
   const [mobilePanel, setMobilePanel] = useState(null);
 
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [hiringDecision, setHiringDecision] = useState(null);
+  const [hiringDecisionLoading, setHiringDecisionLoading] = useState(false);
+  const [hiringDecisionError, setHiringDecisionError] = useState('');
+  const hiringModalSeqRef = useRef(0);
   const [setupModalOpen, setSetupModalOpen] = useState(true);
   const [selfPaced, setSelfPaced] = useState(false);
   const [timeUpModalOpen, setTimeUpModalOpen] = useState(false);
@@ -557,6 +561,9 @@ export default function Page() {
         setHistorySessionItems([]);
         activeSessionIdRef.current = null;
         sessionCompleteShownRef.current = false;
+        setHiringDecision(null);
+        setHiringDecisionError('');
+        setHiringDecisionLoading(false);
         setAnswer('');
         setSpeechInterim('');
         bumpSessionCounter();
@@ -584,6 +591,9 @@ export default function Page() {
         setHistorySessionItems([]);
         activeSessionIdRef.current = null;
         sessionCompleteShownRef.current = false;
+        setHiringDecision(null);
+        setHiringDecisionError('');
+        setHiringDecisionLoading(false);
         showToast('Using offline content — check API connection.', true);
         if (timerPreset !== 'none') {
           const minsMap = { '15': 15, '30': 30, '45': 45 };
@@ -709,6 +719,74 @@ export default function Page() {
       setSessionModalOpen(true);
     }
   }, [submittedCount, totalQ, loadingQuestions]);
+
+  useEffect(() => {
+    if (!sessionModalOpen || loadingQuestions) return;
+    if (submittedCount < totalQ || totalQ < 1) return;
+
+    const seq = ++hiringModalSeqRef.current;
+    const probs =
+      difficulty === 'All' ? codingProblems : codingProblems.filter((p) => p.difficulty === difficulty);
+
+    const answersPayload = [];
+    for (let i = 0; i < totalQ; i++) {
+      const s = answerSlots[i];
+      if (!s?.submitted) continue;
+      let qLabel;
+      if (isCoding) {
+        qLabel = probs[i]?.title || codingProblems[i]?.title || `Problem ${i + 1}`;
+      } else {
+        qLabel = currentQuestions[i] || `Question ${i + 1}`;
+      }
+      const answer = isCoding ? String(s.code || '').trim() : String(s.text || '').trim();
+      answersPayload.push({
+        question: String(qLabel).slice(0, 12000),
+        answer: answer.slice(0, 50000),
+        score: typeof s.feedback?.score === 'number' ? s.feedback.score : null,
+      });
+    }
+
+    if (answersPayload.length === 0) return;
+
+    setHiringDecisionLoading(true);
+    setHiringDecisionError('');
+    setHiringDecision(null);
+
+    fetch('/api/hiring-decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: answersPayload,
+        mode,
+        role: selectedRole,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (seq !== hiringModalSeqRef.current) return;
+        if (!res.ok) throw new Error(data.error || 'Hiring decision failed');
+        setHiringDecision(data);
+      })
+      .catch((e) => {
+        if (seq !== hiringModalSeqRef.current) return;
+        setHiringDecisionError(e.message || 'Failed to load hiring decision');
+      })
+      .finally(() => {
+        if (seq === hiringModalSeqRef.current) setHiringDecisionLoading(false);
+      });
+  }, [
+    sessionModalOpen,
+    submittedCount,
+    totalQ,
+    loadingQuestions,
+    answerSlots,
+    mode,
+    selectedRole,
+    isCoding,
+    currentQuestions,
+    codingProblems,
+    difficulty,
+  ]);
 
   const logViolation = useCallback(
     async (detail, vType = 'paste_attempt') => {
@@ -3408,6 +3486,80 @@ export default function Page() {
             <button type="button" className="modal-close" aria-label="Close" onClick={() => setSessionModalOpen(false)}>
               ✕
             </button>
+          </div>
+          <div className="breakdown-label" style={{ marginTop: 0, marginBottom: 8 }}>
+            AI hiring decision
+          </div>
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 14,
+              borderRadius: 10,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              minHeight: 72,
+            }}
+          >
+            {hiringDecisionLoading ? (
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>Analyzing your session…</p>
+            ) : null}
+            {hiringDecisionError ? (
+              <p className="err-text" style={{ margin: 0 }}>
+                {hiringDecisionError}
+              </p>
+            ) : null}
+            {hiringDecision && !hiringDecisionLoading ? (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'baseline', marginBottom: 8 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    Verdict
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color:
+                        hiringDecision.verdict === 'Strong Hire' || hiringDecision.verdict === 'Hire'
+                          ? 'var(--success)'
+                          : hiringDecision.verdict === 'Borderline'
+                            ? 'var(--warning)'
+                            : 'var(--error)',
+                    }}
+                  >
+                    {hiringDecision.verdict}
+                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--muted)' }}>
+                    Overall {hiringDecision.overall_score}/10
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                  {hiringDecision.summary}
+                </p>
+                <div style={{ fontSize: 13 }}>
+                  <strong>Communication</strong> — {hiringDecision.communication?.rating}
+                  <div style={{ margin: '4px 0 10px', color: 'var(--muted)' }}>
+                    {hiringDecision.communication?.comment}
+                  </div>
+                  <strong>Technical depth</strong> — {hiringDecision.technical_depth?.rating}
+                  <div style={{ margin: '4px 0 10px', color: 'var(--muted)' }}>
+                    {hiringDecision.technical_depth?.comment}
+                  </div>
+                  <strong>Confidence</strong> — {hiringDecision.confidence?.rating}
+                  <div style={{ margin: '4px 0 0', color: 'var(--muted)' }}>{hiringDecision.confidence?.comment}</div>
+                </div>
+              </>
+            ) : null}
+            {!hiringDecisionLoading && !hiringDecisionError && !hiringDecision ? (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Preparing hiring analysis…</p>
+            ) : null}
           </div>
           <div className="report-nums">
             <div className="report-cell" style={{ flex: '1 1 100%', marginBottom: 8 }}>

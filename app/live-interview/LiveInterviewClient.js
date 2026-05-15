@@ -163,13 +163,18 @@ export default function LiveInterviewClient() {
   const [reactionLoading, setReactionLoading] = useState(false);
   const [followupGenLoading, setFollowupGenLoading] = useState(false);
   const [followupPrompt, setFollowupPrompt] = useState('');
+  const [hiringDecision, setHiringDecision] = useState(null);
+  const [hiringDecisionLoading, setHiringDecisionLoading] = useState(false);
+  const [hiringDecisionError, setHiringDecisionError] = useState('');
   const pendingSaveRef = useRef(null);
+  const hiringLiveSeqRef = useRef(0);
   const activeSessionIdRef = useRef(null);
 
   const lastSpokenQuestionRef = useRef(-1);
   const advanceTimerRef = useRef(null);
   const qIndexRef = useRef(0);
   const questionsRef = useRef([]);
+  const liveAnswersLogRef = useRef([]);
 
   const canSpeechIn = supportsSpeechRecognition();
   const canSpeechOut = supportsSpeechSynthesis();
@@ -179,6 +184,39 @@ export default function LiveInterviewClient() {
 
   qIndexRef.current = qIndex;
   questionsRef.current = questions;
+
+  useEffect(() => {
+    if (phase !== 'hiring') return;
+    const answers = liveAnswersLogRef.current;
+    const seq = ++hiringLiveSeqRef.current;
+    if (!answers.length) {
+      setHiringDecisionError('No answers recorded for this session.');
+      setHiringDecisionLoading(false);
+      setHiringDecision(null);
+      return;
+    }
+    setHiringDecisionLoading(true);
+    setHiringDecisionError('');
+    setHiringDecision(null);
+    fetch('/api/hiring-decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers, mode, role: selectedRole }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (seq !== hiringLiveSeqRef.current) return;
+        if (!res.ok) throw new Error(data.error || 'Hiring decision failed');
+        setHiringDecision(data);
+      })
+      .catch((e) => {
+        if (seq !== hiringLiveSeqRef.current) return;
+        setHiringDecisionError(e.message || 'Failed to load hiring decision');
+      })
+      .finally(() => {
+        if (seq === hiringLiveSeqRef.current) setHiringDecisionLoading(false);
+      });
+  }, [phase, mode, selectedRole]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -378,7 +416,7 @@ export default function LiveInterviewClient() {
   const savePendingInterviewRow = useCallback(
     async (followupAnswerOrNull) => {
       const stash = pendingSaveRef.current;
-      if (!stash || !userId || guestMode) return;
+      if (!stash) return;
       const { qText, main, secs, raw, followupQ } = stash;
       const ans =
         followupAnswerOrNull != null &&
@@ -386,6 +424,12 @@ export default function LiveInterviewClient() {
         followupQ
           ? `Answer: ${main}\n\nFollow-up: ${followupQ}\nFollow-up Answer: ${String(followupAnswerOrNull).trim()}`
           : main;
+      liveAnswersLogRef.current.push({
+        question: qText,
+        answer: ans,
+        score: typeof raw?.score === 'number' ? raw.score : null,
+      });
+      if (!userId || guestMode) return;
       await saveAnswerRemote({
         question: qText,
         answer: ans,
@@ -429,6 +473,10 @@ export default function LiveInterviewClient() {
       setFollowupGenLoading(false);
       setFollowupPrompt('');
       pendingSaveRef.current = null;
+      liveAnswersLogRef.current = [];
+      setHiringDecision(null);
+      setHiringDecisionError('');
+      setHiringDecisionLoading(false);
       lastSpokenQuestionRef.current = -1;
       activeSessionIdRef.current = null;
       questionStartedAtRef.current = Date.now();
@@ -457,13 +505,7 @@ export default function LiveInterviewClient() {
     const i = qIndexRef.current;
     const len = questionsRef.current.length;
     if (len > 0 && i >= len - 1) {
-      setPhase('done');
-      const sid = activeSessionIdRef.current;
-      if (sid && userId && !guestMode) {
-        router.push(`/report/${encodeURIComponent(sid)}`);
-      } else {
-        router.push('/');
-      }
+      setPhase('hiring');
       return;
     }
 
@@ -471,7 +513,7 @@ export default function LiveInterviewClient() {
     questionStartedAtRef.current = Date.now();
     setQIndex((x) => x + 1);
     setPhase('running');
-  }, [guestMode, router, stopAllTts, userId]);
+  }, [stopAllTts]);
 
   const skipFollowupOnly = useCallback(async () => {
     if (phase !== 'followup') return;
@@ -606,6 +648,7 @@ export default function LiveInterviewClient() {
       setFollowupGenLoading(false);
       setReactionText(DEFAULT_REACTION);
       await speak(DEFAULT_REACTION);
+      liveAnswersLogRef.current.push({ question: qText, answer: combined, score: null });
       if (userId && !guestMode) {
         try {
           await saveAnswerRemote({
@@ -666,6 +709,8 @@ export default function LiveInterviewClient() {
 
     setReactionText('Question skipped.');
     setPhase('reacting');
+
+    liveAnswersLogRef.current.push({ question: qText, answer: '[Skipped]', score: null });
 
     if (userId && !guestMode) {
       try {
@@ -856,10 +901,103 @@ export default function LiveInterviewClient() {
     );
   }
 
-  if (phase === 'done') {
+  if (phase === 'hiring') {
+    const sid = activeSessionIdRef.current;
+    const goReportOrHome = () => {
+      if (sid && userId && !guestMode) {
+        router.push(`/report/${encodeURIComponent(sid)}`);
+      } else {
+        router.push('/');
+      }
+    };
+
     return (
       <div className="live-page" style={pageStyle}>
-        <p style={{ color: 'var(--muted)' }}>Wrapping up…</p>
+        <div style={{ maxWidth: 640, margin: '0 auto', padding: '8px 16px 48px' }}>
+          <Link href="/" style={{ color: 'var(--accent)', fontSize: 14 }}>
+            ← Home
+          </Link>
+          <h1 style={{ fontSize: 26, fontWeight: 700, margin: '20px 0 8px' }}>Session complete</h1>
+          <p style={{ color: 'var(--muted)', marginBottom: 20, lineHeight: 1.5 }}>
+            AI hiring decision based on your interview answers.
+          </p>
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-card)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+              minHeight: 120,
+            }}
+          >
+            {hiringDecisionLoading ? (
+              <p style={{ margin: 0, color: 'var(--muted)' }}>Analyzing your session…</p>
+            ) : null}
+            {hiringDecisionError ? (
+              <p style={{ margin: 0, color: 'var(--error)' }}>{hiringDecisionError}</p>
+            ) : null}
+            {hiringDecision && !hiringDecisionLoading ? (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'baseline', marginBottom: 10 }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    Verdict
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color:
+                        hiringDecision.verdict === 'Strong Hire' || hiringDecision.verdict === 'Hire'
+                          ? 'var(--success)'
+                          : hiringDecision.verdict === 'Borderline'
+                            ? 'var(--warning)'
+                            : 'var(--error)',
+                    }}
+                  >
+                    {hiringDecision.verdict}
+                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--muted)' }}>
+                    Overall {hiringDecision.overall_score}/10
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
+                  {hiringDecision.summary}
+                </p>
+                <div style={{ fontSize: 14 }}>
+                  <strong>Communication</strong> — {hiringDecision.communication?.rating}
+                  <div style={{ margin: '4px 0 10px', color: 'var(--muted)' }}>
+                    {hiringDecision.communication?.comment}
+                  </div>
+                  <strong>Technical depth</strong> — {hiringDecision.technical_depth?.rating}
+                  <div style={{ margin: '4px 0 10px', color: 'var(--muted)' }}>
+                    {hiringDecision.technical_depth?.comment}
+                  </div>
+                  <strong>Confidence</strong> — {hiringDecision.confidence?.rating}
+                  <div style={{ margin: '4px 0 0', color: 'var(--muted)' }}>{hiringDecision.confidence?.comment}</div>
+                </div>
+              </>
+            ) : null}
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
+            <button type="button" className="btn btn-primary" onClick={goReportOrHome}>
+              {sid && userId && !guestMode ? 'View report' : 'Back to home'}
+            </button>
+            {sid && userId && !guestMode ? (
+              <button type="button" className="btn btn-ghost" onClick={() => router.push('/')}>
+                Home
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }
