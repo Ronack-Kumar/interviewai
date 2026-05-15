@@ -161,6 +161,9 @@ export default function LiveInterviewClient() {
 
   const [reactionText, setReactionText] = useState('');
   const [reactionLoading, setReactionLoading] = useState(false);
+  const [followupGenLoading, setFollowupGenLoading] = useState(false);
+  const [followupPrompt, setFollowupPrompt] = useState('');
+  const pendingSaveRef = useRef(null);
   const activeSessionIdRef = useRef(null);
 
   const lastSpokenQuestionRef = useRef(-1);
@@ -372,6 +375,32 @@ export default function LiveInterviewClient() {
     [guestMode, mode, userId]
   );
 
+  const savePendingInterviewRow = useCallback(
+    async (followupAnswerOrNull) => {
+      const stash = pendingSaveRef.current;
+      if (!stash || !userId || guestMode) return;
+      const { qText, main, secs, raw, followupQ } = stash;
+      const ans =
+        followupAnswerOrNull != null &&
+        String(followupAnswerOrNull).trim() &&
+        followupQ
+          ? `Answer: ${main}\n\nFollow-up: ${followupQ}\nFollow-up Answer: ${String(followupAnswerOrNull).trim()}`
+          : main;
+      await saveAnswerRemote({
+        question: qText,
+        answer: ans,
+        score: raw?.score ?? null,
+        accuracy: raw?.accuracy ?? null,
+        clarity: raw?.clarity ?? null,
+        depth: raw?.depth ?? null,
+        feedback: typeof raw?.feedback === 'string' ? raw.feedback : null,
+        ideal_answer: raw?.idealAnswer ?? '',
+        time_taken_seconds: secs,
+      });
+    },
+    [guestMode, saveAnswerRemote, userId]
+  );
+
   const startInterview = useCallback(async () => {
     setSetupError('');
     setLoadingQuestions(true);
@@ -397,6 +426,9 @@ export default function LiveInterviewClient() {
       setAnswerText('');
       setLiveTranscript('');
       setReactionText('');
+      setFollowupGenLoading(false);
+      setFollowupPrompt('');
+      pendingSaveRef.current = null;
       lastSpokenQuestionRef.current = -1;
       activeSessionIdRef.current = null;
       questionStartedAtRef.current = Date.now();
@@ -416,6 +448,9 @@ export default function LiveInterviewClient() {
     stopAllTts();
     setReactionText('');
     setReactionLoading(false);
+    setFollowupGenLoading(false);
+    setFollowupPrompt('');
+    pendingSaveRef.current = null;
     setAnswerText('');
     setLiveTranscript('');
 
@@ -438,7 +473,46 @@ export default function LiveInterviewClient() {
     setPhase('running');
   }, [guestMode, router, stopAllTts, userId]);
 
+  const skipFollowupOnly = useCallback(async () => {
+    if (phase !== 'followup') return;
+    stopRecognition();
+    stopAllTts();
+    await savePendingInterviewRow(null);
+    pendingSaveRef.current = null;
+    setFollowupPrompt('');
+    setAnswerText('');
+    setLiveTranscript('');
+    setPhase('reacting');
+    setReactionText('Next question in a few seconds.');
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null;
+      goNextOrFinish();
+    }, 4000);
+  }, [phase, stopRecognition, stopAllTts, savePendingInterviewRow, goNextOrFinish]);
+
   const submitCurrent = useCallback(async () => {
+    if (phase === 'followup') {
+      const fu = `${answerText}${liveTranscript}`.trim();
+      if (!fu) return;
+
+      stopRecognition();
+      stopAllTts();
+
+      await savePendingInterviewRow(fu);
+      pendingSaveRef.current = null;
+      setFollowupPrompt('');
+      setAnswerText('');
+      setLiveTranscript('');
+      setPhase('reacting');
+      setReactionText('Nice work. Next question in a few seconds.');
+
+      advanceTimerRef.current = setTimeout(() => {
+        advanceTimerRef.current = null;
+        goNextOrFinish();
+      }, 4000);
+      return;
+    }
+
     const qText = typeof questions[qIndex] === 'string' ? questions[qIndex] : String(questions[qIndex]);
     const combined = `${answerText}${liveTranscript}`.trim();
     if (!combined) return;
@@ -452,6 +526,7 @@ export default function LiveInterviewClient() {
     );
 
     setReactionLoading(true);
+    setFollowupGenLoading(false);
     setPhase('reacting');
 
     try {
@@ -470,22 +545,65 @@ export default function LiveInterviewClient() {
       const reaction = reactionFromFeedback(raw);
       setReactionText(reaction);
 
-      if (userId && !guestMode) {
-        await saveAnswerRemote({
-          question: qText,
-          answer: combined,
-          score: raw.score ?? null,
-          accuracy: raw.accuracy ?? null,
-          clarity: raw.clarity ?? null,
-          depth: raw.depth ?? null,
-          feedback: typeof raw.feedback === 'string' ? raw.feedback : null,
-          ideal_answer: raw.idealAnswer ?? '',
-          time_taken_seconds: secs,
-        });
-      }
+      pendingSaveRef.current = {
+        qText,
+        main: combined,
+        secs,
+        raw,
+        followupQ: '',
+      };
 
       await speak(reaction);
+
+      setFollowupGenLoading(true);
+      let fq = '';
+      try {
+        const fr = await fetch('/api/followup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: qText,
+            answer: combined,
+            mode,
+            role: selectedRole,
+          }),
+        });
+        const fd = await fr.json().catch(() => ({}));
+        if (fr.ok && !fd.error && typeof fd.followup === 'string') {
+          fq = fd.followup.trim();
+        }
+      } catch {
+        fq = '';
+      }
+      setFollowupGenLoading(false);
+
+      if (!fq) {
+        await savePendingInterviewRow(null);
+        pendingSaveRef.current = null;
+        advanceTimerRef.current = setTimeout(() => {
+          advanceTimerRef.current = null;
+          goNextOrFinish();
+        }, 4000);
+        return;
+      }
+
+      pendingSaveRef.current = {
+        qText,
+        main: combined,
+        secs,
+        raw,
+        followupQ: fq,
+      };
+
+      await speak(`Follow-up: ${fq}`);
+      setFollowupPrompt(fq);
+      setAnswerText('');
+      setLiveTranscript('');
+      setReactionText('');
+      setPhase('followup');
     } catch (e) {
+      pendingSaveRef.current = null;
+      setFollowupGenLoading(false);
       setReactionText(DEFAULT_REACTION);
       await speak(DEFAULT_REACTION);
       if (userId && !guestMode) {
@@ -505,15 +623,15 @@ export default function LiveInterviewClient() {
           /* ignore */
         }
       }
+      advanceTimerRef.current = setTimeout(() => {
+        advanceTimerRef.current = null;
+        goNextOrFinish();
+      }, 4000);
     } finally {
       setReactionLoading(false);
     }
-
-    advanceTimerRef.current = setTimeout(() => {
-      advanceTimerRef.current = null;
-      goNextOrFinish();
-    }, 4000);
   }, [
+    phase,
     answerText,
     guestMode,
     goNextOrFinish,
@@ -522,6 +640,7 @@ export default function LiveInterviewClient() {
     qIndex,
     questions,
     saveAnswerRemote,
+    savePendingInterviewRow,
     selectedRole,
     speak,
     stopRecognition,
@@ -749,6 +868,8 @@ export default function LiveInterviewClient() {
   const qDisplay = typeof currentQuestion === 'string' ? currentQuestion : String(currentQuestion);
   const progressLabel = `Question ${qIndex + 1} of ${questions.length}`;
   const isReacting = phase === 'reacting';
+  const showAnswerPad = phase === 'running' || phase === 'followup';
+  const togglesBusy = isReacting || followupGenLoading;
 
   return (
     <div className="live-page" style={pageStyle}>
@@ -762,18 +883,18 @@ export default function LiveInterviewClient() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16, alignItems: 'center' }}>
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>Question:</span>
-          <ToggleChip small active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canTtsOutput || isReacting}>
+          <ToggleChip small active={questionDelivery === 'voice'} onClick={() => setQuestionDelivery('voice')} disabled={!canTtsOutput || togglesBusy}>
             Voice
           </ToggleChip>
-          <ToggleChip small active={questionDelivery === 'text'} onClick={() => setQuestionDelivery('text')} disabled={isReacting}>
+          <ToggleChip small active={questionDelivery === 'text'} onClick={() => setQuestionDelivery('text')} disabled={togglesBusy}>
             Text
           </ToggleChip>
           <span style={{ width: 16 }} />
           <span style={{ color: 'var(--muted)', fontSize: 12 }}>Answer:</span>
-          <ToggleChip small active={answerInput === 'voice'} onClick={() => setAnswerInput('voice')} disabled={!canSpeechIn || isReacting}>
+          <ToggleChip small active={answerInput === 'voice'} onClick={() => setAnswerInput('voice')} disabled={!canSpeechIn || togglesBusy}>
             Voice
           </ToggleChip>
-          <ToggleChip small active={answerInput === 'text'} onClick={() => setAnswerInput('text')} disabled={isReacting}>
+          <ToggleChip small active={answerInput === 'text'} onClick={() => setAnswerInput('text')} disabled={togglesBusy}>
             Text
           </ToggleChip>
         </div>
@@ -791,18 +912,48 @@ export default function LiveInterviewClient() {
         >
           {qDisplay}
         </div>
-        {questionDelivery === 'voice' && !isReacting ? (
+        {questionDelivery === 'voice' && showAnswerPad ? (
           <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: -16, marginBottom: 24, fontSize: 13 }}>
             Question is also read aloud.
           </p>
         ) : null}
 
-        {!isReacting ? (
+        {showAnswerPad ? (
           <>
+            {phase === 'followup' && followupPrompt ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: '14px 16px',
+                  borderRadius: 10,
+                  border: '1px solid rgba(129, 140, 248, 0.45)',
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  textAlign: 'left',
+                  maxWidth: 640,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: 'var(--muted)',
+                    marginBottom: 8,
+                  }}
+                >
+                  Follow-up:
+                </div>
+                <div style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--text-primary)' }}>{followupPrompt}</div>
+              </div>
+            ) : null}
+
             {answerInput === 'text' ? (
               <textarea
                 style={{ ...textareaStyle, minHeight: 160 }}
-                placeholder="Type your answer…"
+                placeholder={phase === 'followup' ? 'Type your follow-up answer…' : 'Type your answer…'}
                 value={answerText}
                 onChange={(e) => setAnswerText(e.target.value)}
                 disabled={listening}
@@ -852,17 +1003,28 @@ export default function LiveInterviewClient() {
             )}
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-              <button type="button" className="btn btn-primary" onClick={submitCurrent} disabled={!`${answerText}${liveTranscript}`.trim()}>
-                Submit answer
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void submitCurrent()}
+                disabled={!`${answerText}${liveTranscript}`.trim() || followupGenLoading}
+              >
+                {phase === 'followup' ? 'Submit follow-up' : 'Submit answer'}
               </button>
-              <button type="button" className="btn btn-ghost" onClick={skipQuestion}>
-                Skip
-              </button>
+              {phase === 'followup' ? (
+                <button type="button" className="btn btn-ghost" onClick={() => void skipFollowupOnly()}>
+                  Skip follow-up
+                </button>
+              ) : (
+                <button type="button" className="btn btn-ghost" onClick={skipQuestion}>
+                  Skip
+                </button>
+              )}
             </div>
           </>
         ) : null}
 
-        {(reactionText || reactionLoading) && (
+        {isReacting && (reactionText || reactionLoading || followupGenLoading) ? (
           <div
             style={{
               marginTop: 28,
@@ -881,11 +1043,14 @@ export default function LiveInterviewClient() {
             ) : (
               <p style={{ margin: 0, fontSize: 16, lineHeight: 1.55, color: 'var(--text-primary)' }}>{reactionText}</p>
             )}
-            {isReacting && !reactionLoading ? (
+            {followupGenLoading ? (
+              <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--muted)' }}>Generating follow-up…</p>
+            ) : null}
+            {isReacting && !reactionLoading && !followupGenLoading && reactionText ? (
               <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--muted)' }}>Next question in a few seconds…</p>
             ) : null}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

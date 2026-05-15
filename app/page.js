@@ -366,6 +366,12 @@ export default function Page() {
   const [difficulty, setDifficulty] = useState('All');
 
   const [answerSavedFlash, setAnswerSavedFlash] = useState(false);
+  /** Text interview only: idle → loading follow-up → awaiting follow-up answer */
+  const [followupPhase, setFollowupPhase] = useState('idle');
+  const [followupQuestionText, setFollowupQuestionText] = useState('');
+  const [stashedMainAnswer, setStashedMainAnswer] = useState('');
+  const followupAbortRef = useRef(null);
+  const skipFollowupHandledRef = useRef(false);
   const [codingOutputOpen, setCodingOutputOpen] = useState(false);
   const [codingCaseRows, setCodingCaseRows] = useState([]);
 
@@ -1219,6 +1225,89 @@ export default function Page() {
     guestSubmitLocked,
   ]);
 
+  const resetFollowupState = useCallback(() => {
+    followupAbortRef.current = null;
+    setFollowupPhase('idle');
+    setFollowupQuestionText('');
+    setStashedMainAnswer('');
+    skipFollowupHandledRef.current = false;
+  }, []);
+
+  const completeTextQuestionSave = useCallback(
+    async (mainText, followupQ, followupAns) => {
+      if (answerSlots[questionIndex]?.submitted) return;
+      if (guestSubmitLocked) {
+        setGuestLimitModalOpen(true);
+        return;
+      }
+
+      const main = String(mainText || '').trim();
+      const stored =
+        followupQ && typeof followupAns === 'string' && followupAns.trim()
+          ? `Answer: ${main}\n\nFollow-up: ${String(followupQ).trim()}\nFollow-up Answer: ${followupAns.trim()}`
+          : main;
+
+      if (!stored) {
+        showToast('Please enter or record an answer first', true);
+        return;
+      }
+
+      setAnswerSlots((prev) => {
+        const n = [...prev];
+        n[questionIndex] = {
+          ...n[questionIndex],
+          text: stored,
+          code: '',
+          lang: codeLang,
+          submitted: true,
+        };
+        return n;
+      });
+
+      await saveSessionRemote({
+        mode,
+        question: currentTextQuestion,
+        answer: stored,
+        score: null,
+        accuracy: null,
+        clarity: null,
+        depth: null,
+        feedback: null,
+        session_id: activeSessionIdRef.current,
+        time_taken_seconds: Math.max(0, Math.floor((Date.now() - questionStartedAtRef.current) / 1000)),
+        ideal_answer: '',
+      });
+
+      setAnswerSavedFlash(true);
+      if (answerFlashTimerRef.current) clearTimeout(answerFlashTimerRef.current);
+      answerFlashTimerRef.current = setTimeout(() => {
+        setAnswerSavedFlash(false);
+        answerFlashTimerRef.current = null;
+      }, 2000);
+      if (guestMode) {
+        const nextGuestCount = guestCount + 1;
+        setGuestCount(nextGuestCount);
+        localStorage.setItem('guestCount', String(nextGuestCount));
+        if (nextGuestCount >= 3) {
+          setGuestLimitModalOpen(true);
+          setGuestSubmitLocked(true);
+        }
+      }
+    },
+    [
+      answerSlots,
+      questionIndex,
+      guestSubmitLocked,
+      guestMode,
+      guestCount,
+      showToast,
+      mode,
+      currentTextQuestion,
+      codeLang,
+      saveSessionRemote,
+    ]
+  );
+
   const fetchAiFeedback = useCallback(async () => {
     const s = answerSlots[questionIndex];
 
@@ -1388,8 +1477,6 @@ export default function Page() {
     showToast,
   ]);
 
-  submitAnswerRef.current = commitAnswer;
-
   const goNext = useCallback(() => {
     if (questionIndex < totalQ - 1) setQuestionIndex((i) => i + 1);
   }, [questionIndex, totalQ]);
@@ -1398,11 +1485,169 @@ export default function Page() {
     goNext();
   }, [goNext]);
 
-  const handleSubmit = useCallback(async () => {
-    await commitAnswer();
-    await new Promise((r) => setTimeout(r, 500));
+  const handleSkipFollowup = useCallback(async () => {
+    if (isCoding) return;
+    if (followupPhase === 'idle') return;
+
+    skipFollowupHandledRef.current = true;
+    if (followupPhase === 'loading') {
+      followupAbortRef.current?.abort();
+    }
+
+    const main = stashedMainAnswer.trim();
+    if (!main) {
+      resetFollowupState();
+      return;
+    }
+
+    await completeTextQuestionSave(main, null, null);
+    resetFollowupState();
+    setAnswer('');
+    setSpeechInterim('');
+    if (captionOn) setCaptionText('');
     goNext();
-  }, [commitAnswer, goNext]);
+  }, [
+    isCoding,
+    followupPhase,
+    stashedMainAnswer,
+    completeTextQuestionSave,
+    resetFollowupState,
+    goNext,
+    captionOn,
+  ]);
+
+  const handleSubmit = useCallback(async () => {
+    if (isCoding) {
+      await commitAnswer();
+      await new Promise((r) => setTimeout(r, 500));
+      goNext();
+      return;
+    }
+
+    if (followupPhase === 'loading') return;
+
+    if (followupPhase === 'awaiting') {
+      const fu = (answer + speechInterim).trim();
+      if (!fu) {
+        showToast('Please enter a follow-up answer or use Skip follow-up', true);
+        return;
+      }
+      if (fu.length > 2000) {
+        showToast(`Answer too long (${fu.length}/2000 chars).`, true);
+        return;
+      }
+      if (guestSubmitLocked) {
+        setGuestLimitModalOpen(true);
+        return;
+      }
+      await completeTextQuestionSave(stashedMainAnswer, followupQuestionText, fu);
+      resetFollowupState();
+      setAnswer('');
+      setSpeechInterim('');
+      if (captionOn) setCaptionText('');
+      goNext();
+      return;
+    }
+
+    const textAnswer = (answer + speechInterim).trim();
+    if (!textAnswer) {
+      showToast('Please enter or record an answer first', true);
+      return;
+    }
+    if (textAnswer.length > 2000) {
+      showToast(`Answer too long (${textAnswer.length}/2000 chars).`, true);
+      return;
+    }
+    if (guestSubmitLocked) {
+      setGuestLimitModalOpen(true);
+      return;
+    }
+
+    setStashedMainAnswer(textAnswer);
+    setFollowupPhase('loading');
+    skipFollowupHandledRef.current = false;
+
+    const ac = new AbortController();
+    followupAbortRef.current = ac;
+
+    try {
+      const res = await fetch('/api/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: currentTextQuestion,
+          answer: textAnswer,
+          mode,
+          role: selectedRole,
+        }),
+        signal: ac.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (skipFollowupHandledRef.current) return;
+
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Could not generate follow-up', true);
+        await completeTextQuestionSave(textAnswer, null, null);
+        resetFollowupState();
+        setAnswer('');
+        setSpeechInterim('');
+        goNext();
+        return;
+      }
+
+      const fq = typeof data.followup === 'string' ? data.followup.trim() : '';
+      if (!fq) {
+        showToast('Empty follow-up — saving your answer.', true);
+        await completeTextQuestionSave(textAnswer, null, null);
+        resetFollowupState();
+        setAnswer('');
+        setSpeechInterim('');
+        goNext();
+        return;
+      }
+
+      setFollowupQuestionText(fq);
+      setFollowupPhase('awaiting');
+      setAnswer('');
+      setSpeechInterim('');
+      if (captionOn) setCaptionText('');
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      if (skipFollowupHandledRef.current) return;
+      showToast(e.message || 'Could not generate follow-up', true);
+      await completeTextQuestionSave(textAnswer, null, null);
+      resetFollowupState();
+      setAnswer('');
+      setSpeechInterim('');
+      goNext();
+    } finally {
+      followupAbortRef.current = null;
+    }
+  }, [
+    isCoding,
+    followupPhase,
+    answer,
+    speechInterim,
+    captionOn,
+    guestSubmitLocked,
+    showToast,
+    mode,
+    selectedRole,
+    currentTextQuestion,
+    stashedMainAnswer,
+    followupQuestionText,
+    completeTextQuestionSave,
+    resetFollowupState,
+    goNext,
+    commitAnswer,
+  ]);
+
+  useEffect(() => {
+    submitAnswerRef.current = () => {
+      void handleSubmit();
+    };
+  }, [handleSubmit]);
 
   const goPrev = useCallback(() => {
     if (questionIndex > 0) setQuestionIndex((i) => i - 1);
@@ -1411,6 +1656,15 @@ export default function Page() {
   useEffect(() => {
     goNextRef.current = goNext;
   }, [goNext]);
+
+  useEffect(() => {
+    followupAbortRef.current?.abort();
+    followupAbortRef.current = null;
+    setFollowupPhase('idle');
+    setFollowupQuestionText('');
+    setStashedMainAnswer('');
+    skipFollowupHandledRef.current = false;
+  }, [questionIndex]);
 
   useEffect(() => {
     goPrevRef.current = goPrev;
@@ -1473,7 +1727,11 @@ export default function Page() {
     if (loadingQuestions) return;
     const s = answerSlots[questionIndex];
     if (!s) return;
-    setAnswer(s.text || '');
+    if (!isCoding && s.submitted) {
+      setAnswer('');
+    } else {
+      setAnswer(s.text || '');
+    }
     setSpeechInterim('');
     setCaptionText('');
     setFeedbackData(s.feedback);
@@ -2654,6 +2912,24 @@ export default function Page() {
 
                   <div className="question-counter-plain" aria-live="polite">
                     {loadingQuestions ? '…' : `${qOrdinal} / ${qTotal}`}
+                    {!isCoding && followupPhase !== 'idle' ? (
+                      <span
+                        style={{
+                          marginLeft: 10,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          background: 'rgba(99, 102, 241, 0.25)',
+                          color: 'var(--text-primary, #e2e8f0)',
+                          verticalAlign: 'middle',
+                        }}
+                      >
+                        Follow-up
+                      </span>
+                    ) : null}
                   </div>
                   <div className="question-nav-progress" aria-hidden>
                     <div
@@ -2672,6 +2948,40 @@ export default function Page() {
                       currentTextQuestion || '—'
                     )}
                   </div>
+
+                  {!isCoding && followupPhase === 'loading' ? (
+                    <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--muted, #94a3b8)' }}>
+                      Generating follow-up…
+                    </p>
+                  ) : null}
+
+                  {!isCoding && followupPhase === 'awaiting' && followupQuestionText ? (
+                    <div
+                      style={{
+                        marginTop: 14,
+                        padding: '14px 16px',
+                        borderRadius: 10,
+                        background: 'rgba(99, 102, 241, 0.12)',
+                        border: '1px solid rgba(129, 140, 248, 0.45)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          color: 'var(--muted, #94a3b8)',
+                          marginBottom: 8,
+                        }}
+                      >
+                        Follow-up:
+                      </div>
+                      <div style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--text-primary, #f1f5f9)' }}>
+                        {followupQuestionText}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="hint-below" hidden={!questionHint && !hintLoading}>
                     {hintLoading ? 'Getting hint…' : `💡 ${questionHint}`}
@@ -2770,7 +3080,7 @@ export default function Page() {
               <button
                 type="button"
                 className="btn btn-ghost controls-row__prev"
-                disabled={loadingQuestions || questionIndex === 0 || controlsDisabled}
+                disabled={loadingQuestions || questionIndex === 0 || controlsDisabled || (!isCoding && followupPhase !== 'idle')}
                 onClick={goPrev}
               >
                 ← Previous
@@ -2801,15 +3111,25 @@ export default function Page() {
               )}
             </div>
             <span style={{ flex: 1 }} aria-hidden />
-            <div className="interview-action-bar__right">
+            <div className="interview-action-bar__right" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {!isCoding && followupPhase !== 'idle' ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => void handleSkipFollowup()}
+                  disabled={controlsDisabled || readOnly || guestSubmitLocked}
+                >
+                  Skip follow-up
+                </button>
+              ) : null}
               {!currentQuestionSubmitted && (
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={handleSubmit}
-                  disabled={controlsDisabled || readOnly || guestSubmitLocked}
+                  onClick={() => void handleSubmit()}
+                  disabled={controlsDisabled || readOnly || guestSubmitLocked || (!isCoding && followupPhase === 'loading')}
                 >
-                  Submit
+                  {!isCoding && followupPhase === 'awaiting' ? 'Submit follow-up' : 'Submit'}
                 </button>
               )}
               {currentQuestionSubmitted && (
