@@ -400,7 +400,8 @@ export default function InterviewApp() {
   const [hiringDecisionLoading, setHiringDecisionLoading] = useState(false);
   const [hiringDecisionError, setHiringDecisionError] = useState('');
   const hiringModalSeqRef = useRef(0);
-  const [setupModalOpen, setSetupModalOpen] = useState(true);
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [interviewStarted, setInterviewStarted] = useState(false);
   const [selfPaced, setSelfPaced] = useState(false);
   const [timeUpModalOpen, setTimeUpModalOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState('none');
@@ -858,9 +859,9 @@ export default function InterviewApp() {
 
   useEffect(() => {
     if (!authReady || (!userId && !guestMode)) return;
-    if (setupModalOpen) return;
+    if (setupModalOpen || !interviewStarted) return;
     loadQuestions();
-  }, [mode, activePack, selectedRole, timerPreset, loadQuestions, authReady, userId, guestMode, setupModalOpen, interviewerPersona]);
+  }, [mode, activePack, selectedRole, timerPreset, loadQuestions, authReady, userId, guestMode, setupModalOpen, interviewStarted, interviewerPersona]);
 
   useEffect(() => {
     document.body.classList.toggle('high-contrast', highContrast);
@@ -2435,6 +2436,16 @@ export default function InterviewApp() {
             ) : null}
           </div>
           <div className="main__top-actions">
+            {!interviewStarted ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: 13, padding: '8px 16px', marginRight: 4 }}
+                onClick={() => setSetupModalOpen(true)}
+              >
+                Configure &amp; Start Interview
+              </button>
+            ) : null}
             <Link
               href="/rooms"
               className="btn btn-primary"
@@ -3552,6 +3563,7 @@ export default function InterviewApp() {
             className="btn btn-primary"
             style={{ width: '100%', padding: '12px' }}
             onClick={() => {
+              setInterviewStarted(true);
               setSetupModalOpen(false);
             }}
           >
