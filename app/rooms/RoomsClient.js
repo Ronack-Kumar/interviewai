@@ -167,8 +167,7 @@ export default function RoomsClient() {
         </Link>
         <h1 style={{ fontSize: 26, fontWeight: 700, margin: '16px 0 8px' }}>Peer Rooms</h1>
         <p style={{ color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
-          Create or join a room. Realtime sync uses Supabase channels (no WebRTC). Run{' '}
-          <code style={{ fontSize: 12 }}>supabase/peer-rooms.sql</code> in your Supabase SQL editor first.
+          Practice interviews with friends in real time.
         </p>
 
         {err ? (
