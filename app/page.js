@@ -2044,6 +2044,14 @@ export default function Page() {
           </div>
           <div className="main__top-actions">
             <Link
+              href="/rooms"
+              className="btn btn-primary"
+              style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
+              title="Peer practice rooms with Supabase Realtime"
+            >
+              Peer Rooms
+            </Link>
+            <Link
               href="/live-interview"
               className="btn btn-primary"
               style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
