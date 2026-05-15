@@ -24,34 +24,29 @@ const ROLES = [
 ];
 
 const INTERVIEWER_PERSONA_OPTIONS = [
-  { id: 'standard', badge: '🎯 Standard', title: 'Standard', subtitle: 'Balanced, professional' },
+  { id: 'standard', title: 'Standard', subtitle: 'Balanced, professional' },
   {
     id: 'aggressive_faang',
-    badge: '😤 Aggressive FAANG',
     title: 'Aggressive FAANG',
     subtitle: 'Challenges every answer, asks hard follow-ups, interrupts weak answers',
   },
   {
     id: 'friendly_startup',
-    badge: '🤝 Friendly Startup CTO',
     title: 'Friendly Startup CTO',
     subtitle: 'Conversational, encouraging, asks about thought process',
   },
   {
     id: 'silent_skeptical',
-    badge: '😶 Silent & Skeptical',
     title: 'Silent & Skeptical',
     subtitle: 'Minimal reactions, long pauses, makes candidate uncomfortable',
   },
   {
     id: 'strict_hr',
-    badge: '📋 Strict HR',
     title: 'Strict HR',
     subtitle: 'Focuses on behavior, structure, STAR format, flags vague answers',
   },
   {
     id: 'tcs_infosys',
-    badge: '🇮🇳 TCS/Infosys Style',
     title: 'TCS/Infosys Style',
     subtitle: 'Formal, process-oriented, asks about projects and basics',
   },
@@ -69,7 +64,7 @@ function interviewerPersonaFlavor(personaId) {
 }
 
 function interviewerPersonaBadge(personaId) {
-  return INTERVIEWER_PERSONA_OPTIONS.find((p) => p.id === personaId)?.badge ?? '🎯 Standard';
+  return INTERVIEWER_PERSONA_OPTIONS.find((p) => p.id === personaId)?.title ?? 'Standard';
 }
 
 const FALLBACK = {
@@ -3516,7 +3511,7 @@ export default function InterviewApp() {
                       color: 'var(--text-primary)',
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 4, lineHeight: 1.25 }}>{p.badge}</div>
+                    <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 4, lineHeight: 1.25 }}>{p.title}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.35 }}>{p.subtitle}</div>
                   </button>
                 );
