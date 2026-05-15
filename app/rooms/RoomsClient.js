@@ -162,7 +162,7 @@ export default function RoomsClient() {
   return (
     <div style={shell}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <Link href="/" style={{ color: 'var(--accent)', fontSize: 14 }}>
+        <Link href="/app" style={{ color: 'var(--accent)', fontSize: 14 }}>
           ← Home
         </Link>
         <h1 style={{ fontSize: 26, fontWeight: 700, margin: '16px 0 8px' }}>Peer Rooms</h1>

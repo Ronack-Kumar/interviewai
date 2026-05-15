@@ -274,7 +274,7 @@ export default function ReportClient() {
       <div className="report-page">
         <div className="report-page-inner">
           <p>{err || 'Not found'}</p>
-          <Link href="/">Back home</Link>
+          <Link href="/app">Back home</Link>
         </div>
       </div>
     );
@@ -383,7 +383,7 @@ export default function ReportClient() {
                   'Download PDF'
                 )}
               </button>
-              <Link href="/" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
+              <Link href="/app" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
                 Home
               </Link>
             </div>
@@ -516,7 +516,7 @@ export default function ReportClient() {
       <div className="report-page">
         <div className="report-page-inner">
           <p>{message}</p>
-          <Link href="/">Back home</Link>
+          <Link href="/app">Back home</Link>
         </div>
       </div>
     );

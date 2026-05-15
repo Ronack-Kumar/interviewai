@@ -39,7 +39,7 @@ export default function AuthPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!cancelled && user) {
-        router.replace('/');
+        router.replace('/app');
       }
     })();
     return () => {
@@ -65,7 +65,7 @@ export default function AuthPage() {
         localStorage.removeItem('guestCount');
         localStorage.removeItem('guestSubmitLocked');
       }
-      router.replace('/');
+      router.replace('/app');
       router.refresh();
     } finally {
       setSignInLoading(false);
@@ -108,7 +108,7 @@ export default function AuthPage() {
           localStorage.removeItem('guestCount');
           localStorage.removeItem('guestSubmitLocked');
         }
-        router.replace('/');
+        router.replace('/app');
         router.refresh();
       }, 900);
     } finally {
@@ -295,7 +295,7 @@ export default function AuthPage() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/app')}
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',

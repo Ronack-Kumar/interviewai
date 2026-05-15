@@ -28,7 +28,7 @@ export default function ResetPasswordPage() {
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      router.replace('/');
+      router.replace('/app');
       router.refresh();
     } catch (err) {
       setMsg(err.message || 'Could not reset password');

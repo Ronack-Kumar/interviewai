@@ -769,7 +769,7 @@ export default function LiveInterviewClient() {
     return (
       <div className="live-page" style={pageStyle}>
         <div style={{ maxWidth: 520, width: '100%' }}>
-          <Link href="/" className="live-back" style={{ color: 'var(--accent)', fontSize: 14 }}>
+          <Link href="/app" className="live-back" style={{ color: 'var(--accent)', fontSize: 14 }}>
             ← Back to MockPrep
           </Link>
           <h1 style={{ fontSize: 28, fontWeight: 700, margin: '20px 0 8px' }}>Live AI Interview</h1>
@@ -907,14 +907,14 @@ export default function LiveInterviewClient() {
       if (sid && userId && !guestMode) {
         router.push(`/report/${encodeURIComponent(sid)}`);
       } else {
-        router.push('/');
+        router.push('/app');
       }
     };
 
     return (
       <div className="live-page" style={pageStyle}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '8px 16px 48px' }}>
-          <Link href="/" style={{ color: 'var(--accent)', fontSize: 14 }}>
+          <Link href="/app" style={{ color: 'var(--accent)', fontSize: 14 }}>
             ← Home
           </Link>
           <h1 style={{ fontSize: 26, fontWeight: 700, margin: '20px 0 8px' }}>Session complete</h1>
@@ -1063,7 +1063,7 @@ export default function LiveInterviewClient() {
     <div className="live-page" style={pageStyle}>
       <div style={{ width: '100%', maxWidth: 800, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <Link href="/" style={{ color: 'var(--accent)', fontSize: 14 }}>
+          <Link href="/app" style={{ color: 'var(--accent)', fontSize: 14 }}>
             ← Home
           </Link>
           <span style={{ color: 'var(--muted)', fontSize: 13 }}>{progressLabel}</span>
