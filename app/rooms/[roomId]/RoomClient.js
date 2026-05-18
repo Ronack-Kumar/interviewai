@@ -44,6 +44,7 @@ export default function RoomClient({ roomCode }) {
     .toUpperCase();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [room, setRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [err, setErr] = useState('');
@@ -81,6 +82,7 @@ export default function RoomClient({ roomCode }) {
         return;
       }
       setUser(u);
+      setCurrentUserId(u.id);
       const { data: rows, error: rpcErr } = await supabase.rpc('room_by_code', { _code: code });
       if (rpcErr || !rows?.length) {
         setErr('Room not found.');
@@ -128,7 +130,7 @@ export default function RoomClient({ roomCode }) {
       })
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+        { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
         (payload) => {
           if (payload.new) setRoom(payload.new);
         }
@@ -210,6 +212,16 @@ export default function RoomClient({ roomCode }) {
     await supabase.from('rooms').update(partial).eq('id', room.id);
   };
 
+  const firstTurnUserId = useCallback(
+    (r, parts) => {
+      const order = sortedParticipants(parts);
+      if (r.session_mode === 'observer') return r.host_id;
+      const nonHost = order.find((p) => p.user_id !== r.host_id);
+      return nonHost?.user_id ?? order[0]?.user_id ?? r.host_id;
+    },
+    []
+  );
+
   const startInterview = async () => {
     if (!room || !isHost) return;
     setBusy(true);
@@ -230,9 +242,8 @@ export default function RoomClient({ roomCode }) {
       const questions = Array.isArray(data.questions) ? data.questions.slice(0, 8) : [];
       if (!questions.length) throw new Error('No questions returned');
       const supabase = createClient();
-      const order = sortedParticipants(participants);
-      const first = room.session_mode === 'observer' ? room.host_id : order[0]?.user_id || room.host_id;
-      const { error } = await supabase
+      const first = firstTurnUserId(room, participants);
+      const { data: updatedRoom, error } = await supabase
         .from('rooms')
         .update({
           questions,
@@ -242,8 +253,11 @@ export default function RoomClient({ roomCode }) {
           current_turn_user_id: first,
           round_answers: {},
         })
-        .eq('id', room.id);
+        .eq('id', room.id)
+        .select()
+        .single();
       if (error) throw new Error(error.message);
+      if (updatedRoom) setRoom(updatedRoom);
       setLocalAnswer('');
       setObserverTyping('');
     } catch (e) {
@@ -287,7 +301,7 @@ export default function RoomClient({ roomCode }) {
         const qs = room.questions || [];
         const nextIdx = room.current_question_index + 1;
         if (nextIdx >= qs.length) {
-          await supabase
+          const { data: updatedRoom } = await supabase
             .from('rooms')
             .update({
               status: 'finished',
@@ -295,16 +309,22 @@ export default function RoomClient({ roomCode }) {
               round_answers: {},
               current_turn_user_id: room.host_id,
             })
-            .eq('id', room.id);
+            .eq('id', room.id)
+            .select()
+            .single();
+          if (updatedRoom) setRoom(updatedRoom);
         } else {
-          await supabase
+          const { data: updatedRoom } = await supabase
             .from('rooms')
             .update({
               current_question_index: nextIdx,
               round_answers: {},
               current_turn_user_id: room.host_id,
             })
-            .eq('id', room.id);
+            .eq('id', room.id)
+            .select()
+            .single();
+          if (updatedRoom) setRoom(updatedRoom);
         }
         setLocalAnswer('');
         setObserverTyping('');
@@ -315,12 +335,12 @@ export default function RoomClient({ roomCode }) {
 
       const ids = sortedParticipants(participants).map((p) => p.user_id);
       const prev = room.round_answers && typeof room.round_answers === 'object' ? { ...room.round_answers } : {};
-      prev[user.id] = text;
+      prev[currentUserId] = text;
       const allDone = ids.length > 0 && ids.every((id) => prev[id]);
       let nextTurn = null;
       let stage = 'question';
       if (!allDone) {
-        const curIdx = ids.indexOf(room.current_turn_user_id);
+        const curIdx = ids.findIndex((id) => String(id) === String(room.current_turn_user_id));
         const start = curIdx >= 0 ? curIdx : 0;
         for (let step = 1; step <= ids.length; step++) {
           const cand = ids[(start + step) % ids.length];
@@ -334,14 +354,17 @@ export default function RoomClient({ roomCode }) {
         nextTurn = null;
       }
 
-      await supabase
+      const { data: updatedRoom } = await supabase
         .from('rooms')
         .update({
           round_answers: prev,
           current_turn_user_id: nextTurn,
           stage,
         })
-        .eq('id', room.id);
+        .eq('id', room.id)
+        .select()
+        .single();
+      if (updatedRoom) setRoom(updatedRoom);
       setLocalAnswer('');
     } catch (e) {
       setErr(e.message || 'Submit failed');
@@ -356,15 +379,17 @@ export default function RoomClient({ roomCode }) {
     const nextIdx = room.current_question_index + 1;
     const supabase = createClient();
     if (nextIdx >= qs.length) {
-      await supabase
+      const { data: updatedRoom } = await supabase
         .from('rooms')
         .update({ status: 'finished', stage: 'finished', round_answers: {}, current_turn_user_id: null })
-        .eq('id', room.id);
+        .eq('id', room.id)
+        .select()
+        .single();
+      if (updatedRoom) setRoom(updatedRoom);
       return;
     }
-    const order = sortedParticipants(participants).map((p) => p.user_id);
-    const first = room.session_mode === 'observer' ? room.host_id : order[0] || room.host_id;
-    await supabase
+    const first = firstTurnUserId(room, participants);
+    const { data: updatedRoom } = await supabase
       .from('rooms')
       .update({
         current_question_index: nextIdx,
@@ -372,7 +397,10 @@ export default function RoomClient({ roomCode }) {
         round_answers: {},
         current_turn_user_id: first,
       })
-      .eq('id', room.id);
+      .eq('id', room.id)
+      .select()
+      .single();
+    if (updatedRoom) setRoom(updatedRoom);
     setLocalAnswer('');
   };
 
@@ -397,12 +425,21 @@ export default function RoomClient({ roomCode }) {
 
   if (!room) return null;
 
-  const myTurn =
+  const isMyTurn =
     room.stage === 'question' &&
-    room.current_turn_user_id === user?.id &&
-    (room.session_mode === 'turn' || (room.session_mode === 'observer' && user?.id === room.host_id));
+    room.status === 'active' &&
+    currentUserId != null &&
+    String(room.current_turn_user_id) === String(currentUserId);
 
-  const showObserverStream = room.session_mode === 'observer' && user?.id !== room.host_id && room.status === 'active';
+  const canTypeTurnBased = room.session_mode === 'turn' && isMyTurn;
+  const canTypeObserverHost =
+    room.session_mode === 'observer' && currentUserId != null && String(currentUserId) === String(room.host_id);
+
+  const turnHolder = ordered.find(
+    (p) => String(p.user_id) === String(room.current_turn_user_id)
+  );
+
+  const showObserverStream = room.session_mode === 'observer' && currentUserId !== room.host_id && room.status === 'active';
 
   return (
     <div style={shell}>
@@ -411,7 +448,10 @@ export default function RoomClient({ roomCode }) {
           <div style={{ fontWeight: 700, marginBottom: 12 }}>Participants</div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {ordered.map((p) => {
-              const isTurn = p.user_id === room.current_turn_user_id && room.stage === 'question' && room.status === 'active';
+              const isTurn =
+                String(p.user_id) === String(room.current_turn_user_id) &&
+                room.stage === 'question' &&
+                room.status === 'active';
               return (
                 <li
                   key={p.id}
@@ -523,11 +563,22 @@ export default function RoomClient({ roomCode }) {
 
               {room.stage === 'question' && room.status === 'active' ? (
                 <>
-                  {room.session_mode === 'turn' && !myTurn ? (
-                    <p style={{ color: 'var(--muted)' }}>
-                      Waiting for{' '}
-                      <strong>{ordered.find((p) => p.user_id === room.current_turn_user_id)?.display_name || '…'}</strong>{' '}
-                      to answer…
+                  {room.session_mode === 'turn' && !isMyTurn ? (
+                    <p style={{ color: 'var(--muted)', marginBottom: 12 }}>
+                      Waiting for <strong>{turnHolder?.display_name || 'another participant'}</strong> to answer…
+                    </p>
+                  ) : null}
+
+                  {room.session_mode === 'turn' && isMyTurn ? (
+                    <p
+                      style={{
+                        marginBottom: 10,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      Your turn!
                     </p>
                   ) : null}
 
@@ -547,20 +598,20 @@ export default function RoomClient({ roomCode }) {
                     </div>
                   ) : null}
 
-                  {(myTurn && room.session_mode === 'turn') || (room.session_mode === 'observer' && user?.id === room.host_id) ? (
+                  {canTypeTurnBased || canTypeObserverHost ? (
                     <textarea
                       style={{ ...ta, minHeight: 140 }}
                       value={localAnswer}
                       onChange={(e) => {
                         const v = e.target.value;
                         setLocalAnswer(v);
-                        if (room.session_mode === 'observer' && user?.id === room.host_id) broadcastTyping(v);
+                        if (canTypeObserverHost) broadcastTyping(v);
                       }}
                       placeholder="Your answer…"
                     />
                   ) : null}
 
-                  {room.session_mode === 'observer' && user?.id !== room.host_id ? (
+                  {room.session_mode === 'observer' && currentUserId !== room.host_id ? (
                     <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {EMOJIS.map((em) => (
                         <button key={em} type="button" className="btn btn-ghost" onClick={() => sendReaction(em)}>
@@ -570,7 +621,7 @@ export default function RoomClient({ roomCode }) {
                     </div>
                   ) : null}
 
-                  {myTurn && (room.session_mode === 'turn' || (room.session_mode === 'observer' && user?.id === room.host_id)) ? (
+                  {(canTypeTurnBased || canTypeObserverHost) ? (
                     <button type="button" className="btn btn-primary" style={{ marginTop: 12 }} disabled={busy} onClick={submitAnswer}>
                       Submit answer
                     </button>
