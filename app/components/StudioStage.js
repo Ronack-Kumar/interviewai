@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import AnimatedQuestionContainer from './AnimatedQuestionContainer';
 import CameraStatePill from './CameraStatePill';
@@ -55,6 +56,30 @@ export default function StudioStage({
 }) {
   const diffColors = { Easy: '#22c55e', Medium: '#f59e0b', Hard: '#ef4444' };
   const diffColor = currentProblem?.difficulty ? (diffColors[currentProblem.difficulty] || 'var(--accent)') : 'var(--accent)';
+
+  const [pasteToast, setPasteToast] = useState(null);
+
+  const handlePaste = (e) => {
+    const text = e.clipboardData.getData('text');
+    if (!text) return;
+    
+    if (text.length <= 20) {
+      return; // allow normally
+    }
+    
+    if (text.length > 100) {
+      e.preventDefault();
+      setPasteToast('Large pastes are disabled during interviews. Please type your answer.');
+      setTimeout(() => setPasteToast(null), 3500);
+      console.warn('[SmartPaste System]', { action: 'blocked', length: text.length, timestamp: Date.now(), questionIndex });
+      return;
+    }
+    
+    // Medium paste
+    setPasteToast('Paste detected. This action has been recorded.');
+    setTimeout(() => setPasteToast(null), 3500);
+    console.warn('[SmartPaste System]', { action: 'allowed_medium', length: text.length, timestamp: Date.now(), questionIndex });
+  };
 
   return (
     <main
@@ -292,7 +317,13 @@ export default function StudioStage({
               <textarea
                 rows={6}
                 value={answerText}
-                onChange={(e) => onAnswerChange && onAnswerChange(e.target.value)}
+                maxLength={2000}
+                onPaste={handlePaste}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  if (val.length > 2000) val = val.substring(0, 2000);
+                  if (onAnswerChange) onAnswerChange(val);
+                }}
                 placeholder="Formulate your structured response (Situation → Task → Action → Result)..."
                 disabled={submitting || isSubmitted}
                 style={{
@@ -312,9 +343,14 @@ export default function StudioStage({
                   transition: 'border-color 0.18s ease, background 0.2s ease',
                 }}
               />
-              <div style={{ position: 'absolute', bottom: '12px', right: '14px', fontSize: '0.725rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {answerText.length} / 2000 chars
+              <div style={{ position: 'absolute', bottom: '12px', right: '14px', fontSize: '0.725rem', color: answerText.length >= 2000 ? '#ef4444' : answerText.length >= 1800 ? '#f59e0b' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: answerText.length >= 1800 ? 600 : 400 }}>
+                {answerText.length >= 2000 ? 'Maximum answer length reached.' : `${answerText.length} / 2000`}
               </div>
+              {pasteToast && (
+                <div style={{ position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid var(--warning, #f59e0b)', color: 'var(--text-primary)', padding: '0.5rem 1rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10 }}>
+                  {pasteToast}
+                </div>
+              )}
             </div>
           </div>
         </>

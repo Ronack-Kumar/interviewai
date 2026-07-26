@@ -23,6 +23,15 @@ function IconChart({ size = 15 }) {
   );
 }
 
+function normalizeScore(score) {
+  if (score == null) return '—';
+  let s = Number(score);
+  if (isNaN(s)) return '—';
+  if (s > 10) s = s / 10;
+  if (s > 10) s = 10;
+  return Number.isInteger(s) ? s : s.toFixed(1);
+}
+
 export default function StudioInspector({
   feedbackData = null,
   feedbackLoading = false,
@@ -98,7 +107,7 @@ export default function StudioInspector({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-line)' }}>
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Answer Scorecard</span>
                 <span style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>
-                  {feedbackData.score != null ? feedbackData.score : '—'} / 10
+                  {normalizeScore(feedbackData.score)} / 10
                 </span>
               </div>
 
@@ -134,7 +143,7 @@ export default function StudioInspector({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {sessionHistory.map((item, idx) => (
                 <button
-                  key={idx}
+                  key={item.originalIndex ?? idx}
                   type="button"
                   onClick={() => onSelectHistoryItem && onSelectHistoryItem(item)}
                   style={{
@@ -148,8 +157,8 @@ export default function StudioInspector({
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>
-                    <span>Q0{idx + 1}</span>
-                    <span style={{ color: 'var(--success)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{item.score ?? '—'}/10</span>
+                    <span>Q0{item.originalIndex + 1}</span>
+                    <span style={{ color: 'var(--success)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{normalizeScore(item.score)}/10</span>
                   </div>
                   <div style={{ fontSize: '0.775rem', color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.question}
