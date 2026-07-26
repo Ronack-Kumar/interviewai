@@ -1,0 +1,522 @@
+/* ── Linear / Cursor / Raycast Design System ─────────────────────────────── */
+
+.v2-landing {
+  background-color: #08090b;
+  color: #f1f5f9;
+  font-family: var(--font-ui);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle Monochrome Canvas */
+.v2-container {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Hairline Glass Header */
+.v2-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(8, 9, 11, 0.85);
+  border-bottom: 1px solid #16181d;
+  transition: height 0.25s ease, background 0.25s ease;
+}
+
+.v2-header.scrolled {
+  background: rgba(8, 9, 11, 0.95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.v2-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  transition: height 0.25s ease;
+}
+
+.v2-header.scrolled .v2-header__inner {
+  height: 52px;
+}
+
+.v2-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.v2-logo-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+}
+
+.v2-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+}
+
+.v2-nav-link {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: color 0.15s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.v2-nav-link:hover {
+  color: #ffffff;
+}
+
+.v2-btn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.v2-btn-primary {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.v2-btn-primary:hover {
+  background: #e2e8f0;
+}
+
+.v2-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  border: 1px solid #1e293b;
+}
+
+.v2-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: #334155;
+}
+
+/* ── Mega Menu Container ─────────────────────────────────────────────────── */
+
+.v2-mega-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 780px;
+  background: rgba(11, 13, 17, 0.96);
+  border: 1px solid #1e2028;
+  border-radius: 12px;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 1.25rem;
+  z-index: 200;
+}
+
+.v2-mega-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.v2-mega-item {
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.v2-mega-item:hover,
+.v2-mega-item.active {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #334155;
+}
+
+.v2-mega-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 0.15rem;
+}
+
+.v2-mega-desc {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.v2-mega-preview-box {
+  background: #08090c;
+  border: 1px solid #1e2028;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* ── Hero Section (Editorial Product-First) ────────────────────────────── */
+
+.v2-hero {
+  padding: 4.5rem 0 3.5rem;
+}
+
+.v2-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3.5rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .v2-hero-grid {
+    grid-template-columns: 0.95fr 1.05fr;
+  }
+}
+
+.v2-badge-mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  font-size: 0.775rem;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  font-family: var(--font-mono);
+}
+
+.v2-hero-title {
+  font-size: clamp(2.5rem, 4.5vw, 3.75rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin-bottom: 1.25rem;
+  color: #ffffff;
+}
+
+.v2-hero-sub {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: #94a3b8;
+  margin-bottom: 2rem;
+  max-width: 520px;
+}
+
+.v2-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+/* Authentic UI Window (No Gimmicks, Hairline Borders) */
+.v2-ui-window {
+  background: #0f1117;
+  border: 1px solid #1e2028;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+}
+
+.v2-ui-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #090a0e;
+  border-bottom: 1px solid #16181d;
+}
+
+.v2-ui-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.v2-ui-tab {
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.v2-ui-tab.active {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.v2-ui-body {
+  padding: 1.25rem;
+}
+
+/* Blinking Cursor Animation */
+.v2-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background-color: #38bdf8;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Section 2: Interactive Split Workflow Showcase ─────────────────────── */
+
+.v2-showcase-section {
+  padding: 6rem 0;
+  border-top: 1px solid #16181d;
+}
+
+.v2-showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+  margin-top: 3.5rem;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .v2-showcase-grid {
+    grid-template-columns: 0.8fr 1.2fr;
+  }
+}
+
+.v2-showcase-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.v2-showcase-btn {
+  padding: 1.15rem 1.25rem;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.v2-showcase-btn:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: #1e2028;
+}
+
+.v2-showcase-btn.active {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #334155;
+}
+
+.v2-showcase-cat {
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  font-weight: 500;
+  color: #38bdf8;
+  margin-bottom: 0.25rem;
+}
+
+.v2-showcase-head {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 0.25rem;
+}
+
+.v2-showcase-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+/* ── Section 3: Before vs After Comparison Grid ──────────────────────────── */
+
+.v2-comp-section {
+  padding: 6rem 0;
+  border-top: 1px solid #16181d;
+}
+
+.v2-comp-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-top: 3.5rem;
+}
+
+@media (min-width: 768px) {
+  .v2-comp-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.v2-comp-col {
+  padding: 2rem;
+  border-radius: 10px;
+  border: 1px solid #16181d;
+  background: #0b0d11;
+}
+
+.v2-comp-col--after {
+  border-color: #334155;
+  background: #0f1219;
+}
+
+/* ── Section 4: Architecture Pipeline ───────────────────────────────────── */
+
+.v2-pipeline-section {
+  padding: 6rem 0;
+  border-top: 1px solid #16181d;
+}
+
+.v2-pipeline-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-top: 3.5rem;
+}
+
+@media (min-width: 768px) {
+  .v2-pipeline-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.v2-pipeline-box {
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: #0b0d11;
+  border: 1px solid #16181d;
+}
+
+.v2-pipeline-tag {
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  font-weight: 500;
+  color: #38bdf8;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Code Window */
+.v2-code-box {
+  background: #08090c;
+  border: 1px solid #1e2028;
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  overflow-x: auto;
+}
+
+/* Editorial Section Headers */
+.v2-section-header {
+  max-width: 600px;
+  margin: 0 0 2.5rem;
+}
+
+.v2-section-title {
+  font-size: clamp(1.85rem, 3.5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+  color: #ffffff;
+}
+
+.v2-section-lead {
+  font-size: 1rem;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+/* Hairline FAQ Accordion */
+.v2-faq-wrap {
+  max-width: 720px;
+  margin-top: 3rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.v2-faq-row {
+  border-bottom: 1px solid #16181d;
+}
+
+.v2-faq-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.v2-faq-ans {
+  padding: 0 0 1.25rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Action Section */
+.v2-action-box {
+  padding: 4.5rem 2rem;
+  border-top: 1px solid #16181d;
+  text-align: center;
+  margin: 4rem 0 2rem;
+}

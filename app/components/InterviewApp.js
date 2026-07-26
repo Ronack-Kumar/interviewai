@@ -429,6 +429,11 @@ export default function InterviewApp() {
 
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
 
+  // ── Rate limiting state ────────────────────────────────────────────────────
+  const [rateLimited, setRateLimited] = useState(false);
+  const [rateLimitResetAt, setRateLimitResetAt] = useState(null);
+  const [aiCallCount, setAiCallCount] = useState(0);
+
   const recognitionRef = useRef(null);
   const videoRef = useRef(null);
   const videoStreamRef = useRef(null);
@@ -582,9 +587,14 @@ export default function InterviewApp() {
         const res = await fetch('/api/questions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, user_id: userId || undefined }),
         });
         const data = await res.json();
+        if (res.status === 429 && data.error === 'rate_limited') {
+          setRateLimited(true);
+          setRateLimitResetAt(data.resetAt || null);
+          throw new Error(data.message || 'Daily limit reached');
+        }
         if (!res.ok) throw new Error(data.error || 'Failed to load');
 
         if (mode === 'coding') {
@@ -807,6 +817,7 @@ export default function InterviewApp() {
         answers: answersPayload,
         mode,
         role: selectedRole,
+        user_id: userId || undefined,
       }),
     })
       .then(async (res) => {
@@ -1483,10 +1494,18 @@ export default function InterviewApp() {
           mode,
           role: selectedRole,
           persona: interviewerPersona,
+          user_id: userId || undefined,
         }),
       });
       const parsed = await res.json();
+      if (res.status === 429 && parsed.error === 'rate_limited') {
+        setRateLimited(true);
+        setRateLimitResetAt(parsed.resetAt || null);
+        throw new Error(parsed.message || 'Daily limit reached');
+      }
       if (!res.ok || parsed.error) throw new Error(parsed.error || 'Feedback failed');
+      setAiCallCount((c) => c + 1);
+      if (rateLimited) setRateLimited(false);
 
       setFeedbackData(parsed);
 
@@ -1719,6 +1738,7 @@ export default function InterviewApp() {
           mode,
           role: selectedRole,
           persona: interviewerPersona,
+          user_id: userId || undefined,
         }),
         signal: ac.signal,
       });
@@ -1986,9 +2006,15 @@ export default function InterviewApp() {
           question: qPayload,
           mode,
           role: selectedRole,
+          user_id: userId || undefined,
         }),
       });
       const data = await res.json();
+      if (res.status === 429 && data.error === 'rate_limited') {
+        setRateLimited(true);
+        setRateLimitResetAt(data.resetAt || null);
+        throw new Error(data.message || 'Daily limit reached');
+      }
       if (!res.ok || data.error) throw new Error(data.error || 'Hint failed');
       const hintText = data.hint || '';
       setQuestionHint(hintText);
@@ -2310,6 +2336,13 @@ export default function InterviewApp() {
             {resumeExpanded ? '−' : '+'}
           </span>
         </button>
+
+        {/* ── Daily usage indicator ─────────────────────────────────────── */}
+        {!guestMode && (
+          <div className="sidebar-usage" aria-label="Daily AI usage">
+            <div className="sidebar-usage__label">Free · Resets midnight UTC</div>
+          </div>
+        )}
 
         <div className="sidebar__user">
           <div className="sidebar__user-name" title={authUser?.email || ''}>

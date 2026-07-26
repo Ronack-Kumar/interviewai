@@ -1,16 +1,57 @@
-// Generates interview questions / coding problems
-// Primary: Groq | Fallback: Google Gemini Flash
+/**
+ * app/api/questions/route.js
+ *
+ * Generates interview questions or coding problems.
+ * Groq primary → Gemini fallback (via shared aiRouter).
+ * Per-user daily rate limiting (via shared rateLimit helper).
+ * Short-window request deduplication to avoid burning quota on double-loads.
+ */
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_MODEL_TRY_ORDER = [
-  'gemini-2.5-flash',
-  'gemini-flash-latest',
-  'gemini-2.0-flash-001',
-  'gemini-3-flash-preview',
-];
+import { AiCapacityError, aiCapacityResponse, callAI } from '../../../lib/aiRouter';
+import {
+  checkAndIncrement,
+  getUserKey,
+  logAIUsage,
+  rateLimitedResponse,
+} from '../../../lib/rateLimit';
 
-// ── Shared helpers ───────────────────────────────────────────────────
+// ── Request deduplication cache ───────────────────────────────────────────────
+// Stores recent results keyed by a hash of the request payload.
+// TTL: 30 seconds — catches rapid double-loads without being stale.
+
+const requestCache = new Map();
+const CACHE_TTL_MS = 30_000;
+
+function hashRequest(obj) {
+  const str = JSON.stringify(obj);
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return String(h >>> 0);
+}
+
+function getCached(key) {
+  const entry = requestCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    requestCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key, data) {
+  // Limit cache size to 50 entries (memory guard)
+  if (requestCache.size >= 50) {
+    const oldest = requestCache.keys().next().value;
+    requestCache.delete(oldest);
+  }
+  requestCache.set(key, { data, ts: Date.now() });
+}
+
+// ── Shared JSON parser ────────────────────────────────────────────────────────
+
 function safeParseJSON(text) {
   let clean = text.replace(/```json|```/g, '').trim();
   clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
@@ -27,99 +68,7 @@ function safeParseJSON(text) {
   }
 }
 
-// ── Groq call ────────────────────────────────────────────────────────
-async function callGroq({ model, systemPrompt, userPrompt, temperature, max_tokens }) {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error('GROQ_API_KEY not set');
-
-  const res = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature,
-      max_tokens,
-    }),
-  });
-
-  if (res.status === 429) throw Object.assign(new Error('Groq rate limit'), { status: 429 });
-
-  const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('No text from Groq');
-  return text;
-}
-
-function geminiExtractText(data) {
-  const parts = data?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return '';
-  return parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('');
-}
-
-function geminiShouldTryNextModel(res, errorMessage) {
-  if (res.status === 404) return true;
-  const m = String(errorMessage || '');
-  return /not found|is not found|does not exist|was not found|UNAVAILABLE_MODEL|MODEL_NOT_FOUND/i.test(m);
-}
-
-// ── Gemini call ──────────────────────────────────────────────────────
-async function callGemini(systemPrompt, userPrompt) {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
-
-  const generationConfig = { temperature: 0.75, maxOutputTokens: 4096 };
-  let lastError = '';
-
-  for (const modelId of GEMINI_MODEL_TRY_ORDER) {
-    const res = await fetch(`${GEMINI_REST_BASE}/${modelId}:generateContent?key=${geminiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig,
-      }),
-    });
-
-    if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
-
-    const data = await res.json();
-    console.log(`Gemini (${modelId}):`, JSON.stringify(data).slice(0, 300));
-
-    const errMsg = data?.error?.message || '';
-
-    if (!res.ok) {
-      lastError = `Gemini HTTP ${res.status} (${modelId}): ${errMsg || JSON.stringify(data).slice(0, 200)}`;
-      if (geminiShouldTryNextModel(res, errMsg)) continue;
-      throw new Error(lastError);
-    }
-
-    const text = geminiExtractText(data);
-    if (text) return text;
-
-    lastError = 'No text from Gemini (' + modelId + '): ' + JSON.stringify(data).slice(0, 200);
-  }
-
-  throw new Error(lastError || 'All Gemini models failed');
-}
-
-// ── Smart router: try Groq, fallback to Gemini ───────────────────────
-async function callAI(params) {
-  try {
-    const text = await callGroq(params);
-    console.log('✅ Questions served by Groq');
-    return text;
-  } catch (groqErr) {
-    console.warn('⚠️ Groq failed:', groqErr.message, '— trying Gemini...');
-    const text = await callGemini(params.systemPrompt, params.userPrompt);
-    console.log('✅ Questions served by Gemini (fallback)');
-    return text;
-  }
-}
+// ── Persona config ────────────────────────────────────────────────────────────
 
 const VALID_PERSONAS = new Set([
   'standard',
@@ -140,7 +89,7 @@ function personaQuestionModifier(persona) {
     case 'aggressive_faang':
       return `\n\nInterviewer persona — Aggressive FAANG: bias toward harder questions, edge cases, scalability, failure modes, and system design at large scale. Avoid softball prompts.`;
     case 'friendly_startup':
-      return `\n\nInterviewer persona — Friendly startup CTO: favor practical, real-world scenarios, shipping trade-offs, and “how would you approach this on a small team” angles. Keep questions grounded but still substantive.`;
+      return `\n\nInterviewer persona — Friendly startup CTO: favor practical, real-world scenarios, shipping trade-offs, and "how would you approach this on a small team" angles. Keep questions grounded but still substantive.`;
     case 'silent_skeptical':
       return `\n\nInterviewer persona — Silent & skeptical: keep questions terse and slightly under-specified; minimal setup; no warm framing; let the candidate fill gaps.`;
     case 'strict_hr':
@@ -152,17 +101,32 @@ function personaQuestionModifier(persona) {
   }
 }
 
+// ── Code starter templates ────────────────────────────────────────────────────
+
+const starterTemplates = {
+  python:     'def solution():\n    pass',
+  javascript: 'function solution() {\n  \n}',
+  java:       'public static void solution() {\n  \n}',
+  cpp:        'void solution() {\n  \n}',
+};
+
+// ── Route handler ─────────────────────────────────────────────────────────────
+
 export async function POST(request) {
-  const body = await request.json();
-  const { mode, pack, resumeText, role, persona: personaRaw } = body;
-  const persona = normalizePersona(personaRaw);
-  const personaBlock = personaQuestionModifier(persona);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { mode, pack, resumeText, role, persona: personaRaw, user_id } = body;
 
   if (!mode) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
   }
 
-  const hasGroqKey = !!process.env.GROQ_API_KEY;
+  const hasGroqKey   = !!process.env.GROQ_API_KEY;
   const hasGeminiKey = !!process.env.GEMINI_API_KEY;
   console.log('GROQ key exists:', hasGroqKey, '| GEMINI key exists:', hasGeminiKey);
 
@@ -170,27 +134,43 @@ export async function POST(request) {
     return Response.json({ error: 'No API key configured' }, { status: 500 });
   }
 
-  const roleLabel =
-    typeof role === 'string' && role.trim() ? role.trim() : 'Software Engineer';
+  // ── Rate limiting ──
+  const userKey = getUserKey(request, user_id);
+  const { allowed, resetAt } = await checkAndIncrement(userKey, 'questions');
+  if (!allowed) return rateLimitedResponse(resetAt);
+
+  // ── Deduplication cache check ──
+  const cacheKey = hashRequest({ mode, pack, role, persona: normalizePersona(personaRaw), resumeText: (resumeText || '').slice(0, 50) });
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('✅ Questions served from cache (dedup)');
+    return Response.json(cached, { status: 200 });
+  }
+
+  // ── Build prompts ──
+  const persona      = normalizePersona(personaRaw);
+  const personaBlock = personaQuestionModifier(persona);
+  const roleLabel    = typeof role === 'string' && role.trim() ? role.trim() : 'Software Engineer';
+  const safeResume   = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
 
   const modeDescriptions = {
     technical: 'technical software engineering interview (data structures, algorithms, system design, databases)',
-    hr: 'HR and behavioral interview using the STAR method (situational, teamwork, leadership, conflict, growth)',
-    case: 'case study and analytical interview (market sizing, business problem solving, frameworks)',
-    stress: 'stress/pressure interview with tough follow-up questions that challenge the candidate',
-    coding: 'live coding and data structures / algorithms round',
+    hr:        'HR and behavioral interview using the STAR method (situational, teamwork, leadership, conflict, growth)',
+    case:      'case study and analytical interview (market sizing, business problem solving, frameworks)',
+    stress:    'stress/pressure interview with tough follow-up questions that challenge the candidate',
+    coding:    'live coding and data structures / algorithms round',
   };
 
   const packDescriptions = {
-    tcs: 'TCS (Tata Consultancy Services) — focus on Java, OOPS, DBMS, networking, SDLC, service-based company style',
+    tcs:     'TCS (Tata Consultancy Services) — focus on Java, OOPS, DBMS, networking, SDLC, service-based company style',
     infosys: 'Infosys — focus on microservices, Agile, REST APIs, cloud, design patterns, enterprise tech',
-    wipro: 'Wipro — focus on DSA basics, SQL, MVC, HTTP, recursion, end-to-end project experience',
-    faang: 'FAANG/top tech companies — focus on distributed systems, large-scale design, advanced algorithms, trade-offs',
+    wipro:   'Wipro — focus on DSA basics, SQL, MVC, HTTP, recursion, end-to-end project experience',
+    faang:   'FAANG/top tech companies — focus on distributed systems, large-scale design, advanced algorithms, trade-offs',
   };
 
-  const safeResumeText = typeof resumeText === 'string' ? resumeText.substring(0, 500) : '';
+  const t0 = Date.now();
 
-  // ── Coding round ─────────────────────────────────────────────────
+  // ── Coding mode ──────────────────────────────────────────────────────────────
   if (mode === 'coding') {
     const systemPrompt = `You are an expert coding interview author. Generate exactly 6 unique algorithmic problems as a JSON array ONLY (no markdown).
 Each element must be an object with these keys:
@@ -210,38 +190,34 @@ No plagiarism — original statements.${personaBlock}`;
     let userPrompt = `Generate 6 coding interview problems for a ${roleLabel} interview. Tailor difficulty mix: 1 Easy, 3 Medium, 2 Hard.
 Enforce one unique topic per problem from the fixed list (arrays, strings, linked lists, trees, dynamic programming, sorting) — no duplicates.`;
 
-    if (safeResumeText.trim().length > 50) {
-      userPrompt += `\n\nCandidate background (tailor 2-3 problems):\n${safeResumeText}`;
+    if (safeResume.trim().length > 50) {
+      userPrompt += `\n\nCandidate background (tailor 2-3 problems):\n${safeResume}`;
     }
 
     try {
-      const text = await callAI({
-        model: 'llama-3.1-8b-instant', // for Groq; Gemini ignores this field
+      const { text, provider } = await callAI({
         systemPrompt,
-        userPrompt,
+        userContent: userPrompt,
+        groqModel:   'llama-3.1-8b-instant',
         temperature: 0.75,
-        max_tokens: 4096,
+        maxTokens:   4096,
       });
 
       const parsed = safeParseJSON(text);
-
-      const starterTemplates = {
-        python: 'def solution():\n    pass',
-        javascript: 'function solution() {\n  \n}',
-        java: 'public static void solution() {\n  \n}',
-        cpp: 'void solution() {\n  \n}',
-      };
-
-      parsed.forEach((p) => {
-        if (!p.templates) p.templates = starterTemplates;
-      });
+      parsed.forEach((p) => { if (!p.templates) p.templates = starterTemplates; });
 
       if (!Array.isArray(parsed) || parsed.length === 0) {
         throw new Error('Response was not a valid array');
       }
 
-      return Response.json({ problems: parsed.slice(0, 6) }, { status: 200 });
+      const result = { problems: parsed.slice(0, 6) };
+      setCache(cacheKey, result);
+      console.log(`✅ Questions (coding) served by ${provider}`);
+      logAIUsage({ userKey, route: 'questions/coding', provider, success: true, latencyMs: Date.now() - t0 });
+      return Response.json(result, { status: 200 });
     } catch (err) {
+      logAIUsage({ userKey, route: 'questions/coding', provider: 'none', success: false, latencyMs: Date.now() - t0 });
+      if (err instanceof AiCapacityError) return aiCapacityResponse(err);
       console.error('Questions (coding) API error:', err);
       return Response.json(
         { error: 'Failed to generate coding problems', detail: err.message },
@@ -250,7 +226,7 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     }
   }
 
-  // ── Standard interview modes: 8 questions ────────────────────────
+  // ── Standard interview modes ──────────────────────────────────────────────────
   const systemPrompt = `You are an expert interview question generator. Generate exactly 8 unique, varied interview questions.
 Respond ONLY with a JSON array of 8 strings (no markdown, no extra text, no numbering).
 Example format: ["Question 1?","Question 2?","Question 3?","Question 4?","Question 5?","Question 6?","Question 7?","Question 8?"]
@@ -262,30 +238,35 @@ Make questions varied in difficulty and topic. Avoid repetition.${personaBlock}`
     userPrompt += ` specifically for a ${packDescriptions[pack]} interview`;
   }
 
-  if (safeResumeText.trim().length > 50) {
-    userPrompt += `.\n\nThe candidate's resume/background:\n${safeResumeText}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
+  if (safeResume.trim().length > 50) {
+    userPrompt += `.\n\nThe candidate's resume/background:\n${safeResume}\n\nTailor 3-4 of the questions specifically to their experience, skills, and projects mentioned. The remaining questions should be standard ${mode} questions.`;
   } else {
     userPrompt += '.';
   }
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
 
   try {
-    const text = await callAI({
-      model: 'llama-3.3-70b-versatile',
+    const { text, provider } = await callAI({
       systemPrompt,
-      userPrompt,
-      temperature: 0.95,
-      max_tokens: 800,
+      userContent:  userPrompt,
+      groqModel:    'llama-3.3-70b-versatile',
+      temperature:  0.95,
+      maxTokens:    800,
     });
 
     const parsed = safeParseJSON(text);
-
     if (!Array.isArray(parsed) || parsed.length === 0) {
       throw new Error('Response was not a valid array');
     }
 
-    return Response.json({ questions: parsed }, { status: 200 });
+    const result = { questions: parsed };
+    setCache(cacheKey, result);
+    console.log(`✅ Questions served by ${provider}`);
+    logAIUsage({ userKey, route: 'questions', provider, success: true, latencyMs: Date.now() - t0 });
+    return Response.json(result, { status: 200 });
   } catch (err) {
+    logAIUsage({ userKey, route: 'questions', provider: 'none', success: false, latencyMs: Date.now() - t0 });
+    if (err instanceof AiCapacityError) return aiCapacityResponse(err);
     console.error('Questions API error:', err);
     return Response.json({ error: 'Failed to generate questions', detail: err.message }, { status: 500 });
   }

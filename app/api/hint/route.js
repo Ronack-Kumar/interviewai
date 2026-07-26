@@ -1,69 +1,51 @@
-// Dedicated hint endpoint — concise pointer without full solution
-// Primary: Groq | Fallback: Google Gemini Flash
+/**
+ * app/api/hint/route.js
+ *
+ * Provides a concise hint for the current question without revealing the answer.
+ * Groq primary → Gemini model-chain fallback (via shared aiRouter).
+ * Per-user daily rate limiting (via shared rateLimit helper).
+ *
+ * Note: previously this route only fell back to a single Gemini model
+ * (gemini-2.0-flash), skipping the full model-chain fallback.
+ * Now uses the shared aiRouter which tries the full ordered model list.
+ */
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+import { AiCapacityError, aiCapacityResponse, callAI } from '../../../lib/aiRouter';
+import {
+  checkAndIncrement,
+  getUserKey,
+  logAIUsage,
+  rateLimitedResponse,
+} from '../../../lib/rateLimit';
 
 const MAX_Q = 12000;
 
-// ── Groq call ────────────────────────────────────────────────────────
-async function callGroq(systemPrompt, userContent) {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error('GROQ_API_KEY not set');
-
-  const res = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-      temperature: 0.4,
-      max_tokens: 200,
-    }),
-  });
-
-  if (res.status === 429) throw Object.assign(new Error('Groq rate limit'), { status: 429 });
-
-  const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('No text from Groq');
-  return text;
-}
-
-// ── Gemini call ──────────────────────────────────────────────────────
-async function callGemini(systemPrompt, userContent) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY not set');
-
-  const res = await fetch(`${GEMINI_API_URL}?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userContent }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 200 },
-    }),
-  });
-
-  if (res.status === 429) throw Object.assign(new Error('Gemini rate limit'), { status: 429 });
-
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No text from Gemini');
-  return text;
-}
+// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request) {
-  const body = await request.json();
-  const { question, mode, role } = body;
-
-  if (!question || typeof question !== 'string' || question.length > MAX_Q) {
-    return Response.json({ error: `Valid question is required (max ${MAX_Q} chars)` }, { status: 400 });
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  const { question, mode, role, user_id } = body;
+
+  // ── Input validation ──
+  if (!question || typeof question !== 'string' || question.length > MAX_Q) {
+    return Response.json(
+      { error: `Valid question is required (max ${MAX_Q} chars)` },
+      { status: 400 }
+    );
+  }
+
+  // ── Rate limiting ──
+  const userKey = getUserKey(request, user_id);
+  const { allowed, resetAt } = await checkAndIncrement(userKey, 'hint');
+  if (!allowed) return rateLimitedResponse(resetAt);
+
+  // ── Build AI prompt ──
   const roleLabel = typeof role === 'string' && role.trim() ? role.trim() : '';
 
   let modeHint =
@@ -84,23 +66,26 @@ Respond ONLY with a JSON object: {"hint":"Your one or two sentence hint here."}`
 
   const userContent = `Give me a hint for this interview question / problem:\n${question}`;
 
-  let text;
-
-  // Try Groq first, fallback to Gemini
+  // ── AI call ──
+  const t0 = Date.now();
+  let text, provider;
   try {
-    text = await callGroq(systemPrompt, userContent);
-    console.log('✅ Hint served by Groq');
-  } catch (groqErr) {
-    console.warn('⚠️ Groq failed:', groqErr.message, '— trying Gemini...');
-    try {
-      text = await callGemini(systemPrompt, userContent);
-      console.log('✅ Hint served by Gemini (fallback)');
-    } catch (geminiErr) {
-      console.error('❌ Both APIs failed:', geminiErr.message);
-      return Response.json({ error: 'Failed to get hint', detail: geminiErr.message }, { status: 500 });
-    }
+    ({ text, provider } = await callAI({
+      systemPrompt,
+      userContent,
+      maxTokens: 200,
+      temperature: 0.4,
+    }));
+    console.log(`✅ Hint served by ${provider}`);
+    logAIUsage({ userKey, route: 'hint', provider, success: true, latencyMs: Date.now() - t0 });
+  } catch (err) {
+    logAIUsage({ userKey, route: 'hint', provider: 'none', success: false, latencyMs: Date.now() - t0 });
+    if (err instanceof AiCapacityError) return aiCapacityResponse(err);
+    console.error('❌ Hint AI error:', err.message);
+    return Response.json({ error: 'Failed to get hint', detail: err.message }, { status: 500 });
   }
 
+  // ── Parse and return ──
   let parsed;
   try {
     parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
