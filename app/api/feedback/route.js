@@ -74,7 +74,8 @@ function buildFeedbackSystem(mode, persona) {
   const base = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.technical;
   const p    = normalizePersona(persona);
   const add  = PERSONA_FEEDBACK_ADDENDUM[p];
-  return add ? `${base}\n\n${add}` : base;
+  const gibberishRule = "\n\nCRITICAL: If the candidate's answer is gibberish (e.g. 'asdasdasd'), blank, or completely irrelevant, you MUST reject it with a score of 1 or 0, and set feedback to 'Invalid or irrelevant answer provided.' Do not provide a high score for nonsense.";
+  return (add ? `${base}\n\n${add}` : base) + gibberishRule;
 }
 
 // ── Response parsing ──────────────────────────────────────────────────────────

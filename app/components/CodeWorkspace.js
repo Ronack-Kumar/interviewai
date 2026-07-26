@@ -179,40 +179,8 @@ export default function CodeWorkspace({
     .join(' ');
 
   return (
-    <div className={rootClass}>
-      <div className="code-workspace__toolbar">
-        <label className="code-workspace__label" htmlFor="lang-select">
-          Language
-        </label>
-        <select
-          id="lang-select"
-          className="code-workspace__select"
-          disabled={readOnly}
-          value={language}
-          onChange={(e) => {
-            const id = e.target.value;
-            onLanguageChange(id);
-            const t = templates && templates[id];
-            if (t) onChange(t);
-          }}
-        >
-          {LANG_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="code-workspace__editor" ref={hostRef} />
-      {!hideOutput ? (
-        <div className="code-workspace__output">
-          <div className="code-workspace__output-head">Output</div>
-          <p className="code-workspace__output-note">
-            Hidden test cases are evaluated when you submit for AI feedback. Use visible samples to sanity-check your
-            approach.
-          </p>
-        </div>
-      ) : null}
+    <div className={rootClass} style={{ flex: 1, display: 'flex' }}>
+      <div className="code-workspace__editor" ref={hostRef} style={{ flex: 1, height: '100%' }} />
     </div>
   );
 }

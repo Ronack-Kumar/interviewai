@@ -170,7 +170,6 @@ export async function POST(request) {
 
   const t0 = Date.now();
 
-  // ── Coding mode ──────────────────────────────────────────────────────────────
   if (mode === 'coding') {
     const systemPrompt = `You are an expert coding interview author. Generate exactly 6 unique algorithmic problems as a JSON array ONLY (no markdown).
 Each element must be an object with these keys:
@@ -181,6 +180,8 @@ Each element must be an object with these keys:
 - "examples": array of objects {"input": string, "output": string, "explanation": string}
 - "visibleTests": array of exactly 3 objects {"input": string, "output": string} (shown to candidate)
 - "hiddenTests": array of exactly 2 objects {"input": string, "output": string} (not shown; for evaluation only)
+- "functionSignature": string (e.g., "def twoSum(nums: List[int], target: int) -> List[int]:")
+- "templates": object mapping languages ("python", "javascript", "java", "cpp") to starter code based on the function signature (e.g., {"python": "def twoSum(nums, target):\\n    pass", "javascript": "function twoSum(nums, target) {\\n\\n}"})
 
 Cover these topics, exactly one problem each — no two problems may share the same topic:
 arrays, strings, linked lists, trees, dynamic programming, sorting.

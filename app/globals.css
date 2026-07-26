@@ -505,25 +505,22 @@ body.high-contrast {
 
 /* Sidebar */
 .sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  height: 100vh;
-  width: 220px;
-  min-width: 220px;
+  position: relative;
+  height: 100%;
+  width: var(--sidebar-w, 220px);
+  min-width: var(--sidebar-w, 220px);
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg-primary);
+  border-right: 1px solid var(--border-line, var(--border));
+  background: var(--bg-sidebar, var(--bg-primary));
   display: flex;
   flex-direction: column;
   padding: 1.25rem 1rem 1.5rem;
-  z-index: 100;
-  transition: transform 0.3s ease;
+  z-index: 10;
+  transition: transform 0.3s ease, background 0.2s ease, border-color 0.2s ease;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--border-line, var(--border)) transparent;
 }
 
 .sidebar__brand {
@@ -2070,8 +2067,14 @@ html[data-theme='light'] .question-nav-progress__fill {
   }
 
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
     width: 280px;
     min-width: 280px;
+    z-index: 1000;
     transform: translateX(-100%);
   }
 

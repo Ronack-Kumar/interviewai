@@ -34,9 +34,9 @@ function computeRadarRows(answers) {
     const num = Number(x);
     return Number.isFinite(num) ? Number(num.toFixed(1)) : 0;
   };
-  const acc = avg('accuracy');
-  const clar = avg('clarity');
-  const dep = avg('depth');
+  const acc = avg('accuracy') / 10;
+  const clar = avg('clarity') / 10;
+  const dep = avg('depth') / 10;
   const scores = answers.map((a) => (typeof a?.score === 'number' ? a.score : 0)).filter((x) => x > 0);
   const mean = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const variance =
@@ -540,6 +540,12 @@ function QuestionBlock({ index, row }) {
     >
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, lineHeight: 1.4 }}>
         {q.length > 160 ? `${q.substring(0, 160)}…` : q}
+      </div>
+      <div style={{ fontSize: 13, marginBottom: 8, padding: '8px', background: 'var(--bg-primary)', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)' }}>
+        <div style={{ color: 'var(--muted)', marginBottom: 4, fontSize: 11, textTransform: 'uppercase', fontFamily: 'var(--font-ui)' }}>Candidate Answer:</div>
+        <div style={{ whiteSpace: 'pre-wrap' }}>
+          {safeRow.answer ? safeRow.answer : <span style={{ color: 'var(--muted)', fontStyle: 'italic', fontFamily: 'var(--font-ui)' }}>No answer recorded</span>}
+        </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>{sc}/10</span>

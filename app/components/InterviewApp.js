@@ -3,10 +3,15 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createClient } from '../../lib/supabase';
 import { applyTheme } from './ThemeInit';
+import { classifyError } from '../../lib/errorClassifier';
+
+import StudioHeader from './StudioHeader';
+import StudioStage from './StudioStage';
+import StudioInspector from './StudioInspector';
 
 const CodeWorkspace = dynamic(() => import('./CodeWorkspace'), {
   ssr: false,
@@ -197,31 +202,188 @@ function runCodingSampleCases(problem, codeBody, codeLang) {
   return results;
 }
 
-function buildStubProblems() {
-  return Array.from({ length: 8 }, (_, i) => ({
-    title: `Offline practice problem ${i + 1}`,
-    difficulty: i < 2 ? 'Easy' : i < 6 ? 'Medium' : 'Hard',
-    description:
-      'Given an array of integers, return indices of two numbers such that they add up to a target. You may assume exactly one solution exists.',
+const OFFLINE_PROBLEMS = [
+  {
+    title: 'Two Sum',
+    difficulty: 'Easy',
+    description: 'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice.',
     constraints: ['2 ≤ nums.length ≤ 10^4', '-10^9 ≤ nums[i] ≤ 10^9', '-10^9 ≤ target ≤ 10^9'],
     examples: [
-      {
-        input: 'nums = [2,7,11,15], target = 9',
-        output: '[0,1]',
-        explanation: 'Because nums[0] + nums[1] == 9.',
-      },
+      { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]', explanation: 'nums[0] + nums[1] == 9.' },
+      { input: 'nums = [3,2,4], target = 6', output: '[1,2]', explanation: 'nums[1] + nums[2] == 6.' }
     ],
     visibleTests: [
-      { input: '[2,7,11,15], 9', output: '[0,1]' },
-      { input: '[3,2,4], 6', output: '[1,2]' },
-      { input: '[3,3], 6', output: '[0,1]' },
+      { input: '[2,7,11,15]\n9', output: '[0,1]' },
+      { input: '[3,2,4]\n6', output: '[1,2]' }
     ],
-    hiddenTests: [
-      { input: '(large case)', output: '(verified server-side)' },
-      { input: '(edge case)', output: '(verified server-side)' },
+    hiddenTests: [],
+    functionSignature: 'def twoSum(nums: List[int], target: int) -> List[int]:',
+    templates: {
+      python: 'def twoSum(nums, target):\n    # Write your solution here\n    pass',
+      javascript: 'function twoSum(nums, target) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        // Write your solution here\n        return new int[]{};\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        // Write your solution here\n        return {};\n    }\n};',
+    }
+  },
+  {
+    title: 'Valid Parentheses',
+    difficulty: 'Easy',
+    description: 'Given a string s containing just the characters "(", ")", "{", "}", "[" and "]", determine if the input string is valid. An input string is valid if open brackets must be closed by the same type of brackets, and open brackets must be closed in the correct order.',
+    constraints: ['1 ≤ s.length ≤ 10^4', 's consists of parentheses only "()[]{}"'],
+    examples: [
+      { input: 's = "()"', output: 'true', explanation: 'Valid simple brackets' },
+      { input: 's = "()[]{}"', output: 'true', explanation: 'Multiple valid brackets' },
+      { input: 's = "(]"', output: 'false', explanation: 'Mismatched brackets' }
     ],
-    templates: { ...STUB_TEMPLATES },
-  }));
+    visibleTests: [
+      { input: '"()"', output: 'true' },
+      { input: '"()[]{}"', output: 'true' },
+      { input: '"(]"', output: 'false' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def isValid(s: str) -> bool:',
+    templates: {
+      python: 'def isValid(s):\n    # Write your solution here\n    pass',
+      javascript: 'function isValid(s) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public boolean isValid(String s) {\n        // Write your solution here\n        return false;\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    bool isValid(string s) {\n        // Write your solution here\n        return false;\n    }\n};',
+    }
+  },
+  {
+    title: 'Merge Intervals',
+    difficulty: 'Medium',
+    description: 'Given an array of intervals where intervals[i] = [start_i, end_i], merge all overlapping intervals, and return an array of the non-overlapping intervals that cover all the intervals in the input.',
+    constraints: ['1 ≤ intervals.length ≤ 10^4', 'intervals[i].length == 2', '0 ≤ start_i ≤ end_i ≤ 10^4'],
+    examples: [
+      { input: 'intervals = [[1,3],[2,6],[8,10],[15,18]]', output: '[[1,6],[8,10],[15,18]]', explanation: 'Since intervals [1,3] and [2,6] overlap, merge them into [1,6].' }
+    ],
+    visibleTests: [
+      { input: '[[1,3],[2,6],[8,10],[15,18]]', output: '[[1,6],[8,10],[15,18]]' },
+      { input: '[[1,4],[4,5]]', output: '[[1,5]]' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def merge(intervals: List[List[int]]) -> List[List[int]]:',
+    templates: {
+      python: 'def merge(intervals):\n    # Write your solution here\n    pass',
+      javascript: 'function merge(intervals) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public int[][] merge(int[][] intervals) {\n        // Write your solution here\n        return new int[][]{};\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    vector<vector<int>> merge(vector<vector<int>>& intervals) {\n        // Write your solution here\n        return {};\n    }\n};',
+    }
+  },
+  {
+    title: 'Longest Substring Without Repeating Characters',
+    difficulty: 'Medium',
+    description: 'Given a string s, find the length of the longest substring without repeating characters.',
+    constraints: ['0 ≤ s.length ≤ 5 * 10^4', 's consists of English letters, digits, symbols and spaces.'],
+    examples: [
+      { input: 's = "abcabcbb"', output: '3', explanation: 'The answer is "abc", with the length of 3.' },
+      { input: 's = "bbbbb"', output: '1', explanation: 'The answer is "b", with the length of 1.' }
+    ],
+    visibleTests: [
+      { input: '"abcabcbb"', output: '3' },
+      { input: '"bbbbb"', output: '1' },
+      { input: '"pwwkew"', output: '3' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def lengthOfLongestSubstring(s: str) -> int:',
+    templates: {
+      python: 'def lengthOfLongestSubstring(s):\n    # Write your solution here\n    pass',
+      javascript: 'function lengthOfLongestSubstring(s) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public int lengthOfLongestSubstring(String s) {\n        // Write your solution here\n        return 0;\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    int lengthOfLongestSubstring(string s) {\n        // Write your solution here\n        return 0;\n    }\n};',
+    }
+  },
+  {
+    title: 'Climbing Stairs',
+    difficulty: 'Easy',
+    description: 'You are climbing a staircase. It takes n steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?',
+    constraints: ['1 ≤ n ≤ 45'],
+    examples: [
+      { input: 'n = 2', output: '2', explanation: '1 step + 1 step, or 2 steps.' },
+      { input: 'n = 3', output: '3', explanation: '1+1+1, 1+2, 2+1' }
+    ],
+    visibleTests: [
+      { input: '2', output: '2' },
+      { input: '3', output: '3' },
+      { input: '4', output: '5' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def climbStairs(n: int) -> int:',
+    templates: {
+      python: 'def climbStairs(n):\n    # Write your solution here\n    pass',
+      javascript: 'function climbStairs(n) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public int climbStairs(int n) {\n        // Write your solution here\n        return 0;\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    int climbStairs(int n) {\n        // Write your solution here\n        return 0;\n    }\n};',
+    }
+  },
+  {
+    title: 'Course Schedule',
+    difficulty: 'Medium',
+    description: 'There are a total of numCourses courses you have to take, labeled from 0 to numCourses - 1. You are given an array prerequisites where prerequisites[i] = [a_i, b_i] indicates that you must take course b_i first if you want to take course a_i. Return true if you can finish all courses. Otherwise, return false.',
+    constraints: ['1 ≤ numCourses ≤ 2000', '0 ≤ prerequisites.length ≤ 5000'],
+    examples: [
+      { input: 'numCourses = 2, prerequisites = [[1,0]]', output: 'true', explanation: 'Take course 0 to take course 1.' },
+      { input: 'numCourses = 2, prerequisites = [[1,0],[0,1]]', output: 'false', explanation: 'Impossible.' }
+    ],
+    visibleTests: [
+      { input: '2\n[[1,0]]', output: 'true' },
+      { input: '2\n[[1,0],[0,1]]', output: 'false' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def canFinish(numCourses: int, prerequisites: List[List[int]]) -> bool:',
+    templates: {
+      python: 'def canFinish(numCourses, prerequisites):\n    # Write your solution here\n    pass',
+      javascript: 'function canFinish(numCourses, prerequisites) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public boolean canFinish(int numCourses, int[][] prerequisites) {\n        // Write your solution here\n        return false;\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    bool canFinish(int numCourses, vector<vector<int>>& prerequisites) {\n        // Write your solution here\n        return false;\n    }\n};',
+    }
+  },
+  {
+    title: 'Binary Tree Level Order Traversal',
+    difficulty: 'Medium',
+    description: 'Given the root of a binary tree, return the level order traversal of its nodes\' values. (i.e., from left to right, level by level).',
+    constraints: ['The number of nodes is in the range [0, 2000]', '-1000 ≤ Node.val ≤ 1000'],
+    examples: [
+      { input: 'root = [3,9,20,null,null,15,7]', output: '[[3],[9,20],[15,7]]', explanation: 'Level by level.' }
+    ],
+    visibleTests: [
+      { input: '[3,9,20,null,null,15,7]', output: '[[3],[9,20],[15,7]]' },
+      { input: '[1]', output: '[[1]]' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def levelOrder(root: Optional[TreeNode]) -> List[List[int]]:',
+    templates: {
+      python: 'def levelOrder(root):\n    # Write your solution here\n    pass',
+      javascript: 'function levelOrder(root) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public List<List<Integer>> levelOrder(TreeNode root) {\n        // Write your solution here\n        return new ArrayList<>();\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    vector<vector<int>> levelOrder(TreeNode* root) {\n        // Write your solution here\n        return {};\n    }\n};',
+    }
+  },
+  {
+    title: 'Word Search',
+    difficulty: 'Hard',
+    description: 'Given an m x n grid of characters board and a string word, return true if word exists in the grid. The word can be constructed from letters of sequentially adjacent cells, where adjacent cells are horizontally or vertically neighboring.',
+    constraints: ['m == board.length', 'n = board[i].length', '1 ≤ m, n ≤ 6'],
+    examples: [
+      { input: 'board = [["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]], word = "ABCCED"', output: 'true', explanation: 'Found the word' }
+    ],
+    visibleTests: [
+      { input: '[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]]\n"ABCCED"', output: 'true' },
+      { input: '[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]]\n"ABCB"', output: 'false' }
+    ],
+    hiddenTests: [],
+    functionSignature: 'def exist(board: List[List[str]], word: str) -> bool:',
+    templates: {
+      python: 'def exist(board, word):\n    # Write your solution here\n    pass',
+      javascript: 'function exist(board, word) {\n    // Write your solution here\n}',
+      java: 'class Solution {\n    public boolean exist(char[][] board, String word) {\n        // Write your solution here\n        return false;\n    }\n}',
+      cpp: 'class Solution {\npublic:\n    bool exist(vector<vector<char>>& board, string word) {\n        // Write your solution here\n        return false;\n    }\n};',
+    }
+  }
+];
+
+function buildStubProblems() {
+  return OFFLINE_PROBLEMS;
 }
 
 function shuffleArray(arr) {
@@ -340,7 +502,6 @@ export default function InterviewApp() {
   const [answerSlots, setAnswerSlots] = useState(() =>
     Array.from({ length: 8 }, emptyAnswerSlot)
   );
-  const [sessionHistory, setSessionHistory] = useState([]);
   const [sessionCount, setSessionCount] = useState(0);
 
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -382,8 +543,8 @@ export default function InterviewApp() {
   const [hintLoading, setHintLoading] = useState(false);
 
   const [historyVisible, setHistoryVisible] = useState(false);
-  const [historySessionItems, setHistorySessionItems] = useState([]);
   const [pastSessionRows, setPastSessionRows] = useState([]);
+
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -396,7 +557,33 @@ export default function InterviewApp() {
   const [hiringDecisionError, setHiringDecisionError] = useState('');
   const hiringModalSeqRef = useRef(0);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
-  const [interviewStarted, setInterviewStarted] = useState(false);
+  const [interviewStarted, setInterviewStarted] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('setup_mode')) setModeState(localStorage.getItem('setup_mode'));
+      if (localStorage.getItem('setup_role')) setSelectedRole(localStorage.getItem('setup_role'));
+      if (localStorage.getItem('setup_persona')) setInterviewerPersona(localStorage.getItem('setup_persona'));
+      if (localStorage.getItem('setup_timer')) setTimerPreset(localStorage.getItem('setup_timer'));
+      if (localStorage.getItem('setup_selfPaced')) setSelfPaced(localStorage.getItem('setup_selfPaced') === 'true');
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (setupModalOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleEsc = (e) => {
+        if (e.key === 'Escape') setSetupModalOpen(false);
+      };
+      window.addEventListener('keydown', handleEsc);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEsc);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [setupModalOpen]);
   const [selfPaced, setSelfPaced] = useState(false);
   const [timeUpModalOpen, setTimeUpModalOpen] = useState(false);
   const [timerPreset, setTimerPreset] = useState('none');
@@ -404,7 +591,10 @@ export default function InterviewApp() {
   const [reconnectingCamera, setReconnectingCamera] = useState(false);
   const [faceLookToast, setFaceLookToast] = useState(false);
   const [sessionTimerEndAt, setSessionTimerEndAt] = useState(null);
-  const [themeMode, setThemeMode] = useState('light');
+  const [themeMode, setThemeMode] = useState(() => {
+    if (typeof window === 'undefined') return 'light';
+    try { return localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+  });
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState('Bug Report');
   const [feedbackDesc, setFeedbackDesc] = useState('');
@@ -464,10 +654,40 @@ export default function InterviewApp() {
   const cameraHeightRef = useRef(200);
 
   useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (rafAudioRef.current) cancelAnimationFrame(rafAudioRef.current);
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      if (followupAbortRef.current) followupAbortRef.current.abort();
+    };
+  }, []);
+
+  useEffect(() => {
     cameraEnabledRef.current = cameraEnabled;
   }, [cameraEnabled]);
 
   const isCoding = mode === 'coding';
+
+  const computedSessionHistory = useMemo(() => {
+    return answerSlots
+      .map((slot, idx) => {
+        if (!slot.submitted) return null;
+        const qLabel = isCoding ? (codingProblems[idx]?.title || 'Coding') : (currentQuestions[idx] || '');
+        return {
+          originalIndex: idx,
+          question: qLabel,
+          q: qLabel,
+          score: slot.feedback?.score ?? null,
+          feedback: slot.feedback || null,
+          key: `sh-${idx}`,
+        };
+      })
+      .filter(Boolean);
+  }, [answerSlots, isCoding, codingProblems, currentQuestions]);
   const filteredProblems = difficulty === 'All'
     ? codingProblems
     : codingProblems.filter(p => p.difficulty === difficulty);
@@ -497,6 +717,12 @@ export default function InterviewApp() {
       setToast((t) => ({ ...t, show: false }));
     }, ms);
   }, []);
+
+  const handleThemeToggle = useCallback(() => {
+    const next = themeMode === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    setThemeMode(next);
+  }, [themeMode]);
 
   const checkStreak = useCallback(() => {
     const today = new Date().toDateString();
@@ -613,13 +839,11 @@ export default function InterviewApp() {
           setCurrentQuestions(qs.slice(0, 8));
           setCodingProblems([]);
         }
-        setQuestionIndex(0);
         setAnswerSlots(Array.from({ length: 8 }, emptyAnswerSlot));
-        setSessionHistory([]);
-        setHistorySessionItems([]);
+        setQuestionIndex(0);
+        setHiringDecision(null);
         activeSessionIdRef.current = null;
         sessionCompleteShownRef.current = false;
-        setHiringDecision(null);
         setHiringDecisionError('');
         setHiringDecisionLoading(false);
         setAnswer('');
@@ -643,16 +867,19 @@ export default function InterviewApp() {
           setCurrentQuestions(FALLBACK[mode] || FALLBACK.technical);
           setCodingProblems([]);
         }
-        setQuestionIndex(0);
         setAnswerSlots(Array.from({ length: 8 }, emptyAnswerSlot));
-        setSessionHistory([]);
-        setHistorySessionItems([]);
+        setQuestionIndex(0);
+        setHiringDecision(null);
         activeSessionIdRef.current = null;
         sessionCompleteShownRef.current = false;
-        setHiringDecision(null);
         setHiringDecisionError('');
         setHiringDecisionLoading(false);
-        showToast('Using offline content — check API connection.', true);
+        if (mode === 'coding' || err.message?.includes('Failed to generate coding problems')) {
+          showToast('Loaded curated offline practice problems.', false);
+        } else {
+          const classified = classifyError(err);
+          showToast(`${classified.title}: ${classified.explanation}`, true);
+        }
         if (timerPreset !== 'none') {
           const minsMap = { '15': 15, '30': 30, '45': 45 };
           const mins = minsMap[timerPreset];
@@ -1167,6 +1394,29 @@ export default function InterviewApp() {
     }
   };
 
+  const stopCamera = useCallback(() => {
+    setCameraEnabled(false);
+    cameraEnabledRef.current = false;
+    setVideoActive(false);
+    stopReconnectLoop();
+    detachTrackListeners();
+    const stream = videoStreamRef.current;
+    if (stream && typeof stream.getTracks === 'function') {
+      stream.getTracks().forEach((t) => t.stop());
+    }
+    videoStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    showToast('Camera disabled');
+  }, [detachTrackListeners, stopReconnectLoop, showToast]);
+
+  const toggleCamera = useCallback(async () => {
+    if (videoActive || cameraEnabled) {
+      stopCamera();
+    } else {
+      await startCamera();
+    }
+  }, [videoActive, cameraEnabled, stopCamera]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const id = window.setInterval(() => {
@@ -1273,7 +1523,8 @@ export default function InterviewApp() {
   };
 
   const commitAnswer = useCallback(async () => {
-    if (answerSlots[questionIndex]?.submitted) return;
+    const slot = answerSlots[questionIndex];
+    if (slot?.submitted && !slot?.err) return;
     if (guestSubmitLocked) {
       setGuestLimitModalOpen(true);
       return;
@@ -1509,7 +1760,6 @@ export default function InterviewApp() {
 
       setFeedbackData(parsed);
 
-      const labelQ = isCoding ? currentProblem?.title || 'Coding' : currentTextQuestion;
       setAnswerSlots((prev) => {
         const n = [...prev];
         n[questionIndex] = {
@@ -1520,18 +1770,6 @@ export default function InterviewApp() {
         };
         return n;
       });
-      setSessionHistory((prev) => [
-        ...prev,
-        { q: labelQ, score: parsed.score, feedback: parsed.feedback },
-      ]);
-      setHistorySessionItems((prev) => [
-        {
-          score: parsed.score,
-          q: labelQ,
-          key: `${Date.now()}-${prev.length}`,
-        },
-        ...prev,
-      ]);
 
       const timeTaken = Math.max(
         0,
@@ -1550,6 +1788,7 @@ export default function InterviewApp() {
         time_taken_seconds: timeTaken,
         ideal_answer: typeof parsed.idealAnswer === 'string' ? parsed.idealAnswer : '',
       });
+      return true;
     } catch (e) {
       const msg = e.message || 'Failed to get feedback';
       setFeedbackError(msg);
@@ -1562,6 +1801,7 @@ export default function InterviewApp() {
         };
         return n;
       });
+      return false;
     } finally {
       setFeedbackLoading(false);
     }
@@ -1607,33 +1847,55 @@ export default function InterviewApp() {
     runCodingOutputCases(false);
   }, [runCodingOutputCases]);
 
-  const handleCodingSubmitAllClick = useCallback(async () => {
-    if (!codingProblems[questionIndex]) return;
-    const codeAns = (codeBody || '').trim();
-    if (!codeAns) {
-      showToast('Write some code first', true);
-      return;
-    }
-    runCodingOutputCases(true);
-    await new Promise((r) => requestAnimationFrame(() => r()));
-    await commitAnswer();
-    setTimeout(() => goNextRef.current?.(), 300);
-  }, [
-    runCodingOutputCases,
-    codingProblems,
-    questionIndex,
-    commitAnswer,
-    codeBody,
-    showToast,
-  ]);
+  const stashCurrentAnswer = useCallback(() => {
+    if (loadingQuestions) return;
+    setAnswerSlots((prev) => {
+      const n = [...prev];
+      if (!n[questionIndex] || n[questionIndex].submitted) return prev;
+      n[questionIndex] = {
+        ...n[questionIndex],
+        text: (answer + speechInterim).trim(),
+        code: (codeBody || '').trim(),
+        lang: codeLang,
+      };
+      return n;
+    });
+  }, [loadingQuestions, questionIndex, answer, speechInterim, codeBody, codeLang]);
 
   const goNext = useCallback(() => {
+    stashCurrentAnswer();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setTtsSpeaking(false);
     if (questionIndex < totalQ - 1) setQuestionIndex((i) => i + 1);
-  }, [questionIndex, totalQ]);
+  }, [questionIndex, totalQ, stashCurrentAnswer]);
+
+  const handleUnifiedSubmit = useCallback(async () => {
+    if (isCoding) {
+      if (!codingProblems[questionIndex]) return;
+      const codeAns = (codeBody || '').trim();
+      if (!codeAns) {
+        showToast('Write some code first', true);
+        return;
+      }
+      runCodingOutputCases(true);
+      await new Promise((r) => requestAnimationFrame(() => r()));
+    } else {
+      const textAnswer = (answer + speechInterim).trim();
+      if (!textAnswer) {
+        showToast('Please enter or record an answer first', true);
+        return;
+      }
+    }
+    await commitAnswer();
+    const success = await fetchAiFeedback();
+    if (success) {
+      setTimeout(() => {
+        goNext();
+      }, 1000);
+    }
+  }, [isCoding, codingProblems, questionIndex, codeBody, answer, speechInterim, runCodingOutputCases, commitAnswer, fetchAiFeedback, showToast, goNext]);
 
   const handleNext = useCallback(() => {
     goNext();
@@ -1811,12 +2073,13 @@ export default function InterviewApp() {
   }, [handleSubmit]);
 
   const goPrev = useCallback(() => {
+    stashCurrentAnswer();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setTtsSpeaking(false);
     if (questionIndex > 0) setQuestionIndex((i) => i - 1);
-  }, [questionIndex]);
+  }, [questionIndex, stashCurrentAnswer]);
 
   useEffect(() => {
     goNextRef.current = goNext;
@@ -1892,11 +2155,7 @@ export default function InterviewApp() {
     if (loadingQuestions) return;
     const s = answerSlots[questionIndex];
     if (!s) return;
-    if (!isCoding && s.submitted) {
-      setAnswer('');
-    } else {
-      setAnswer(s.text || '');
-    }
+    setAnswer(s.text || '');
     setSpeechInterim('');
     setCaptionText('');
     setFeedbackData(s.feedback);
@@ -1961,15 +2220,15 @@ export default function InterviewApp() {
       `Best score: ${best}/10`,
       '',
       'Question Breakdown:',
-      ...sessionHistory.map(
-        (item, i) => `  Q${i + 1}. [${item.score}/10] ${(item.q || '').substring(0, 70)}`
+      ...computedSessionHistory.map(
+        (item, i) => `  Q${i + 1}. [${item.score ?? '—'}/10] ${(item.q || '').substring(0, 70)}`
       ),
     ];
     navigator.clipboard
       .writeText(lines.join('\n'))
       .then(() => showToast('📋 Results copied to clipboard!'))
       .catch(() => showToast('Could not access clipboard.', true));
-  }, [scoreList, mode, sessionHistory, selectedRole, showToast]);
+  }, [scoreList, mode, computedSessionHistory, selectedRole, showToast]);
 
   const shuffleOrder = () => {
     if (isCoding) {
@@ -2174,12 +2433,35 @@ export default function InterviewApp() {
   }
 
   return (
-    <div className="app-shell">
-      <div
-        className={`sidebar-backdrop ${mobileSidebarOpen ? 'open' : ''}`}
-        onClick={() => setMobileSidebarOpen(false)}
-        aria-hidden
+    <div style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-ui)', transition: 'background 0.2s ease, color 0.2s ease' }}>
+      {/* ── Studio Header Status Bar ── */}
+      <StudioHeader
+        mode={mode}
+        persona={interviewerPersona}
+        questionIndex={questionIndex}
+        totalQuestions={totalQ}
+        timerRemainingSec={timerRemainingSec}
+        sessionState={
+          loadingQuestions
+            ? 'generating_question'
+            : feedbackLoading
+              ? 'evaluating'
+              : recording
+                ? 'user_speaking'
+                : 'idle'
+        }
+        onThemeToggle={handleThemeToggle}
+        isDark={themeMode === 'dark'}
+        onOpenSetupModal={() => setSetupModalOpen(true)}
+        onOpenFeedbackModal={() => setFeedbackModalOpen(true)}
       />
+
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div
+          className={`sidebar-backdrop ${mobileSidebarOpen ? 'open' : ''}`}
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden
+        />
 
       <aside
         className={`sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}
@@ -2406,7 +2688,7 @@ export default function InterviewApp() {
           ) : null}
           <div className={`history-panel ${historyVisible ? 'visible' : ''}`}>
             {historyLoading && <div className="history-row">Loading…</div>}
-            {historySessionItems.map((h) => (
+            {computedSessionHistory.slice().reverse().map((h) => (
               <div key={h.key} className="history-row">
                 <div
                   className="history-row__score"
@@ -2458,967 +2740,136 @@ export default function InterviewApp() {
         </div>
       </aside>
 
-      <div className="main">
-        <div className="main__top">
-          <div className="main__top-left">
-            <button
-              type="button"
-              className="menu-btn"
-              aria-label="Open navigation"
-              onClick={() => setMobileSidebarOpen(true)}
-            >
-              <span className="menu-btn__glyph" aria-hidden>
-                ☰
-              </span>
-            </button>
-            <p className="top-title">{isCoding ? 'Coding workspace' : 'Interview workspace'}</p>
-            {guestMode ? (
-              <span className="cam-pill warn" style={{ marginLeft: 12 }}>
-                Guest mode: {Math.max(0, 3 - guestCount)} free submits left
-              </span>
-            ) : null}
-          </div>
-          <div className="main__top-actions">
-            {!interviewStarted ? (
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ fontSize: 13, padding: '8px 16px', marginRight: 4 }}
-                onClick={() => setSetupModalOpen(true)}
-              >
-                Configure &amp; Start Interview
-              </button>
-            ) : null}
-            <Link
-              href="/rooms"
-              className="btn btn-ghost"
-              style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
-              title="Peer practice rooms with Supabase Realtime"
-            >
-              Peer Rooms
-            </Link>
-            <Link
-              href="/live-interview"
-              className="btn btn-ghost"
-              style={{ textDecoration: 'none', fontSize: 13, padding: '8px 14px', marginRight: 4 }}
-              title="Voice & text live mock interview"
-            >
-              Live Interview
-            </Link>
-            <button
-              type="button"
-              className="theme-toggle-btn"
-              aria-label="Send feedback"
-              title="Send feedback or report a bug"
-              onClick={() => setFeedbackModalOpen(true)}
-            >
-              💬
-            </button>
-            <button
-              type="button"
-              className="theme-toggle-btn"
-              aria-label="Toggle theme"
-              title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              onClick={() => {
-                const next = themeMode === 'dark' ? 'light' : 'dark';
-                applyTheme(next);
-                setThemeMode(next);
-              }}
-            >
-              {themeMode === 'light' ? '🌙' : '☀️'}
-            </button>
-            <button
-              type="button"
-              className="settings-btn"
-              aria-label="Open settings"
-              aria-expanded={settingsOpen}
-              title="Settings"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <IconGear />
-            </button>
-          </div>
+      {/* ── Settings Panel Overlay ── */}
+      <div
+        className={`settings-backdrop ${settingsOpen ? 'open' : ''}`}
+        onClick={() => setSettingsOpen(false)}
+        aria-hidden
+      />
+      <div
+        className={`settings-panel ${settingsOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-label="Settings"
+      >
+        <div className="settings-close-row">
+          <button type="button" className="btn btn-ghost" onClick={() => setSettingsOpen(false)}>
+            Close
+          </button>
         </div>
-
-        <div
-          className={`settings-backdrop ${settingsOpen ? 'open' : ''}`}
-          onClick={() => setSettingsOpen(false)}
-          aria-hidden
-        />
-        <div
-          className={`settings-panel ${settingsOpen ? 'open' : ''}`}
-          role="dialog"
-          aria-label="Settings"
-        >
-          <div className="settings-close-row">
-            <button type="button" className="btn btn-ghost" onClick={() => setSettingsOpen(false)}>
-              Close
-            </button>
-          </div>
-          <h2>Settings</h2>
-          <div className="settings-timer-label">Theme</div>
-          <div className="timer-pill-row">
-            <button
-              type="button"
-              className={`timer-pill ${themeMode === 'dark' ? 'active' : ''}`}
-              onClick={() => {
-                applyTheme('dark');
-                setThemeMode('dark');
-              }}
-            >
-              Dark
-            </button>
-            <button
-              type="button"
-              className={`timer-pill ${themeMode === 'light' ? 'active' : ''}`}
-              onClick={() => {
-                applyTheme('light');
-                setThemeMode('light');
-              }}
-            >
-              Light
-            </button>
-          </div>
-          <div className="settings-timer-label">Session timer</div>
-          <div className="timer-pill-row">
-            {[
-              { id: '15', label: '15 min' },
-              { id: '30', label: '30 min' },
-              { id: '45', label: '45 min' },
-              { id: 'none', label: 'No limit' },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`timer-pill ${timerPreset === t.id ? 'active' : ''}`}
-                onClick={() => {
-                  setTimerPreset(t.id);
-                  try {
-                    localStorage.setItem('timerPref', t.id);
-                    localStorage.setItem('timerPreset', t.id);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="settings-row">
-            <label>Display</label>
-            <button
-              type="button"
-              className="a11y-chip"
-              aria-pressed={captionOn}
-              onClick={() => setCaptionOn((c) => !c)}
-            >
-              Live captions
-            </button>
-            <button
-              type="button"
-              className="a11y-chip"
-              aria-pressed={readAloudOn}
-              onClick={() => setReadAloudOn((r) => !r)}
-            >
-              Read aloud
-            </button>
-            <button
-              type="button"
-              className="a11y-chip"
-              aria-pressed={highContrast}
-              onClick={() => setHighContrast((h) => !h)}
-            >
-              High contrast
-            </button>
-            <button
-              type="button"
-              className="a11y-chip"
-              aria-pressed={largeText}
-              onClick={() => setLargeText((x) => !x)}
-            >
-              Large text
-            </button>
-          </div>
-        </div>
-
-        <div className="main__scroll">
-          {isCoding ? (
-            <div className="coding-layout coding-layout--leetcode">
-              <div className="coding-lc-panels">
-                <div className="coding-lc-left problem-panel">
-                  <div className="problem-head">
-                    <h2 className="problem-title">
-                      {loadingQuestions ? (
-                        <span className="q-loading">
-                          <span className="spinner" /> Loading…
-                        </span>
-                      ) : (
-                        currentProblem?.title || 'Problem'
-                      )}
-                    </h2>
-                    {currentProblem && (
-                      <span className={`diff-badge ${diffClass}`}>{currentProblem.difficulty}</span>
-                    )}
-                  </div>
-                  {interviewerPersonaFlavor(interviewerPersona) ? (
-                    <p
-                      style={{
-                        margin: '6px 0 10px',
-                        fontSize: 13,
-                        fontStyle: 'italic',
-                        color: 'var(--muted)',
-                        opacity: 0.95,
-                      }}
-                    >
-                      {interviewerPersonaFlavor(interviewerPersona)}
-                    </p>
-                  ) : null}
-                  <hr className="problem-divider" />
-                  <div className="q-progress-track" aria-hidden>
-                    <div className="q-progress-fill" style={{ width: `${progressPct}%` }} />
-                  </div>
-                  {loadingQuestions ? (
-                    <div className="coding-skeleton" aria-hidden>
-                      <div className="coding-skeleton__title" />
-                      <div className="coding-skeleton__desc" />
-                      <div className="coding-skeleton__ex" />
-                      <div className="coding-skeleton__ex" />
-                    </div>
-                  ) : null}
-                  <p className="problem-desc">
-                    {loadingQuestions ? (
-                      <span className="q-loading">
-                        <span className="spinner" /> Loading problem…
-                      </span>
-                    ) : (
-                      currentProblem?.description
-                    )}
-                  </p>
-                  {currentProblem?.examples && currentProblem.examples.length > 0 && (
-                    <>
-                      <div className="problem-section-title">Examples</div>
-                      {currentProblem.examples.map((ex, i) => (
-                        <div key={i} className="example-block">
-                          <div className="problem-section-title" style={{ margin: '0 0 6px' }}>
-                            Example {i + 1}
-                          </div>
-                          <div className="example-io">
-                            <strong>Input:</strong> {ex.input}
-                          </div>
-                          <div className="example-io">
-                            <strong>Output:</strong> {ex.output}
-                          </div>
-                          {ex.explanation ? (
-                            <div className="example-io">
-                              <strong>Explanation:</strong> {ex.explanation}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  {currentProblem?.constraints && (
-                    <>
-                      <div className="problem-section-title">Constraints</div>
-                      <ul className="problem-list">
-                        {currentProblem.constraints.map((c, i) => (
-                          <li key={i}>{c}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {currentProblem?.visibleTests && (
-                    <>
-                      <div className="problem-section-title">Sample test cases</div>
-                      <div className="tests-grid">
-                        {currentProblem.visibleTests.map((t, i) => (
-                          <div key={i} className="test-row">
-                            <span>In: {t.input}</span>
-                            <span>Out: {t.output}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  <div className="problem-section-title">Hidden test cases</div>
-                  <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px' }}>
-                    + 2 hidden test cases
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    style={{ marginTop: 8 }}
-                    onClick={getHint}
-                    disabled={hintLoading || controlsDisabled}
-                  >
-                    Get Hint 💡
-                  </button>
-                </div>
-                <div className="coding-lc-right">
-                  {loadingQuestions ? (
-                    <div className="coding-loading-note">
-                      <span className="spinner" /> Loading problem...
-                    </div>
-                  ) : null}
-                  <CodeWorkspace
-                    value={codeBody}
-                    onChange={setCodeBody}
-                    language={codeLang}
-                    onLanguageChange={setCodeLang}
-                    templates={currentProblem?.templates || {}}
-                    readOnly={readOnly}
-                    hideOutput
-                    leetcodeFill
-                    editorTheme={themeMode === 'light' ? 'vs' : 'vs-dark'}
-                    onPasteBlocked={() => {
-                      showToast('Pasting is disabled in the coding interview editor.', true);
-                      logViolation('monaco_paste_blocked', 'coding_paste');
-                    }}
-                  />
-                  <div className="coding-run-bar">
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={handleCodingRunClick}
-                      disabled={controlsDisabled || readOnly || !currentProblem}
-                    >
-                      Run ▶
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleCodingSubmitAllClick}
-                      disabled={controlsDisabled || !currentProblem || readOnly}
-                    >
-                      Submit ✓
-                    </button>
-                  </div>
-                  <div className="coding-output-panel" hidden={!codingOutputOpen}>
-                    <div className="coding-output-panel__head">Output</div>
-                    {codingCaseRows.length === 0 ? (
-                      <div className="coding-case-row" style={{ color: 'var(--muted)' }}>
-                        Run or Submit to see test results here.
-                      </div>
-                    ) : null}
-                    {codingCaseRows.map((row) => (
-                      <div key={row.key} className="coding-case-row">
-                        <span>
-                          {row.pass === true ? '✅' : row.pass === false ? '❌' : '—'} {row.label}
-                        </span>
-                        <span style={{ color: 'var(--muted)', flex: 1 }}>{row.detail}</span>
-                      </div>
-                    ))}
-                    {false && (feedbackLoading || feedbackData || feedbackError) && (
-                      <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
-                        <div className="feedback-head" style={{ marginBottom: 8 }}>
-                          AI feedback
-                        </div>
-                        {feedbackLoading && (
-                          <p className="feedback-placeholder">
-                            <span className="loading-dots">Analysing your solution</span>
-                          </p>
-                        )}
-                        {feedbackError && !feedbackLoading && (
-                          <p className="err-text">{feedbackError}</p>
-                        )}
-                        {feedbackData && !feedbackLoading && (
-                          <>
-                            <div className="score-display">
-                              <span className="score-display__main">
-                                {Number(feedbackData.score).toFixed(1)}
-                              </span>
-                              <span className="score-display__sub">/10</span>
-                            </div>
-                            <div className="metric-block">
-                              <div className="metric-top">
-                                <span>Accuracy</span>
-                                <span>{feedbackData.accuracy}%</span>
-                              </div>
-                              <div className="metric-track">
-                                <div
-                                  className="metric-fill acc"
-                                  style={{ width: `${feedbackData.accuracy}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div className="metric-block">
-                              <div className="metric-top">
-                                <span>Clarity</span>
-                                <span>{feedbackData.clarity}%</span>
-                              </div>
-                              <div className="metric-track">
-                                <div
-                                  className="metric-fill clar"
-                                  style={{ width: `${feedbackData.clarity}%` }}
-                                />
-                              </div>
-                            </div>
-                            <div className="metric-block">
-                              <div className="metric-top">
-                                <span>Depth</span>
-                                <span>{feedbackData.depth}%</span>
-                              </div>
-                              <div className="metric-track">
-                                <div
-                                  className="metric-fill depth"
-                                  style={{ width: `${feedbackData.depth}%` }}
-                                />
-                              </div>
-                            </div>
-                            {feedbackData.scoreReason && (
-                              <p className="score-reason-muted">{feedbackData.scoreReason}</p>
-                            )}
-                            <div className="feedback-inset">
-                              <p style={{ marginBottom: 0 }}>{feedbackData.feedback}</p>
-                            </div>
-                            {feedbackData.idealAnswer && (
-                              <details className="model-toggle">
-                                <summary>
-                                  <span aria-hidden>▸</span> Model answer
-                                </summary>
-                                <div className="model-body">{feedbackData.idealAnswer}</div>
-                              </details>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="hint-below" hidden={!questionHint && !hintLoading}>
-                {hintLoading ? 'Getting hint…' : `💡 ${questionHint}`}
-              </div>
-
-              <div className="coding-bottom-strip">
-                <div className="q-block coding-workspace-actions" style={{ padding: '10px 1.5rem 0' }}>
-                  <div className="q-block__head q-block__head--nav">
-                    <div
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginBottom: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          letterSpacing: '0.02em',
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          border: '1px solid var(--border)',
-                          background: 'var(--bg-surface)',
-                          color: 'var(--text-primary)',
-                          maxWidth: '100%',
-                        }}
-                      >
-                        {interviewerPersonaBadge(interviewerPersona)}
-                      </span>
-                    </div>
-                    <div className="q-nav-row" role="navigation" aria-label="Question navigation">
-                      <button
-                        type="button"
-                        className="q-nav-btn"
-                        disabled={loadingQuestions || questionIndex === 0 || controlsDisabled}
-                        onClick={goPrev}
-                      >
-                        ← Previous
-                      </button>
-                      <div className="q-num" aria-live="polite">
-                        {loadingQuestions ? '…' : `${qOrdinal} / ${qTotal}`}
-                      </div>
-                      <button
-                        type="button"
-                        className="q-nav-btn"
-                        disabled={loadingQuestions || questionIndex >= totalQ - 1 || controlsDisabled}
-                        onClick={goNext}
-                      >
-                        Next →
-                      </button>
-                    </div>
-                    <div className="q-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Shuffle order"
-                        aria-label="Shuffle order"
-                        onClick={shuffleOrder}
-                        disabled={controlsDisabled}
-                      >
-                        <IconShuffle />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={ttsSpeaking ? 'Stop' : 'Read aloud'}
-                        aria-label={ttsSpeaking ? 'Stop speech' : 'Read aloud'}
-                        onClick={toggleReadAloudManual}
-                      >
-                        {ttsSpeaking ? <IconStop /> : <IconSpeaker />}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Hint"
-                        aria-label="Hint"
-                        onClick={getHint}
-                        disabled={controlsDisabled || hintLoading || readOnly}
-                      >
-                        <IconHint />
-                      </button>
-                    </div>
-                  </div>
-
-                  {submittedCount >= totalQ && totalQ > 0 ? (
-                    <div className="session-report-prompt" style={{ padding: '0 1.5rem' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => setSessionModalOpen(true)}
-                      >
-                        View session report
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="interview-layout" style={{ ['--camera-col-w']: `${cameraHeight}px` }}>
-              {!selfPaced && (
-                <div className="interview-layout__left">
-                  <div className="tab-strip" role="tablist">
-                    {[
-                      { id: 'video', label: 'Video' },
-                      { id: 'audio', label: 'Audio' },
-                      { id: 'text', label: 'Text' },
-                    ].map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="tab"
-                        className={`tab ${activeTab === t.id ? 'active' : ''}`}
-                        aria-selected={activeTab === t.id}
-                        onClick={() => setActiveTab(t.id)}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="media-row interview-layout__media" hidden={activeTab === 'text'}>
-                    <div
-                      className={`video-wrap ${videoActive ? 'video-wrap--live' : ''}`}
-                      style={{ display: activeTab === 'audio' ? 'none' : 'block' }}
-                    >
-                      {!videoActive && (
-                        <div className="video-placeholder">
-                          <span>Camera off</span>
-                          <button type="button" className="allow-cam" onClick={startCamera}>
-                            Allow access
-                          </button>
-                        </div>
-                      )}
-                      <video
-                        ref={videoRef}
-                        className="video-feed"
-                        autoPlay
-                        muted
-                        playsInline
-                        onEmptied={handleCameraLost}
-                        style={{
-                          display: videoActive ? 'block' : 'none',
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          background: '#000',
-                        }}
-                      />
-                      <div className={`live-dot ${videoActive ? 'on' : ''}`}>● Live</div>
-                      <div className={`camera-reconnect-overlay ${cameraLost ? 'open' : ''}`}>
-                        <div className="camera-reconnect-msg">
-                          Camera disconnected — reconnecting...
-                        </div>
-                      </div>
-                      <div
-                        className="face-look-toast"
-                        hidden={
-                          !faceLookToast ||
-                          (typeof window !== 'undefined' &&
-                            (!('FaceDetector' in window) || !window.FaceDetector))
-                        }
-                        role="status"
-                        style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)' }}
-                      >
-                        ⚠️ Please look at the camera
-                      </div>
-                      {videoActive && (
-                        <div className="video-badges">
-                          <span className={`cam-pill ${recording ? 'warn' : ''}`}>
-                            {recording ? '🎤 Mic on' : '🎤 Mic off'}
-                          </span>
-                          <span className="cam-pill ok">📷 Camera on</span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className="video-resize-handle video-resize-handle--right"
-                        aria-label="Resize camera panel width"
-                        onMouseDown={onCameraResizeStart}
-                        onTouchStart={onCameraResizeStart}
-                      />
-                    </div>
-
-                    <div className={`audio-tab-panel ${activeTab === 'audio' ? 'is-visible' : ''}`}>
-                      <button
-                        type="button"
-                        className={`record-fab ${recording ? 'recording' : ''}`}
-                        aria-label={recording ? 'Stop recording' : 'Record answer'}
-                        aria-pressed={recording}
-                        onClick={toggleRecord}
-                        disabled={controlsDisabled || readOnly}
-                      >
-                        <IconMic />
-                      </button>
-                      {recording ? (
-                        <div className="audio-tab-panel__viz" aria-hidden>
-                          {audioLevels.map((h, i) => (
-                            <div key={i} className="audio-bar" style={{ height: h }} />
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="interview-layout__right">
-                <div className="interview-layout__right-inner">
-                  <div className="q-block__head q-block__head--nav q-block__head--tools-only">
-                    <div
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginBottom: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          letterSpacing: '0.02em',
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          border: '1px solid var(--border)',
-                          background: 'var(--bg-surface)',
-                          color: 'var(--text-primary)',
-                          maxWidth: '100%',
-                        }}
-                      >
-                        {interviewerPersonaBadge(interviewerPersona)}
-                      </span>
-                    </div>
-                    <div className="q-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Shuffle order"
-                        aria-label="Shuffle order"
-                        onClick={shuffleOrder}
-                        disabled={controlsDisabled}
-                      >
-                        <IconShuffle />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={ttsSpeaking ? 'Stop' : 'Read aloud'}
-                        aria-label={ttsSpeaking ? 'Stop speech' : 'Read aloud'}
-                        onClick={toggleReadAloudManual}
-                      >
-                        {ttsSpeaking ? <IconStop /> : <IconSpeaker />}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Hint"
-                        aria-label="Hint"
-                        onClick={getHint}
-                        disabled={controlsDisabled || hintLoading || readOnly}
-                      >
-                        <IconHint />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="question-counter-plain" aria-live="polite">
-                    {loadingQuestions ? '…' : `${qOrdinal} / ${qTotal}`}
-                    {!isCoding && followupPhase !== 'idle' ? (
-                      <span
-                        style={{
-                          marginLeft: 10,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
-                          textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          background: 'rgba(99, 102, 241, 0.25)',
-                          color: 'var(--text-primary, #e2e8f0)',
-                          verticalAlign: 'middle',
-                        }}
-                      >
-                        Follow-up
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="question-nav-progress" aria-hidden>
-                    <div
-                      className="question-nav-progress__fill"
-                      style={{ width: `${navProgressPct}%` }}
-                    />
-                  </div>
-
-                  <div key={questionIndex} className="question-body" role="region" aria-live="polite">
-                    {loadingQuestions ? (
-                      <span className="q-loading">
-                        <span className="spinner" />
-                        Generating questions…
-                      </span>
-                    ) : (
-                      currentTextQuestion || '—'
-                    )}
-                  </div>
-
-                  {!isCoding && interviewerPersonaFlavor(interviewerPersona) ? (
-                    <p
-                      style={{
-                        margin: '8px 0 0',
-                        fontSize: 13,
-                        fontStyle: 'italic',
-                        color: 'var(--muted)',
-                        opacity: 0.95,
-                      }}
-                    >
-                      {interviewerPersonaFlavor(interviewerPersona)}
-                    </p>
-                  ) : null}
-
-                  {!isCoding && followupPhase === 'loading' ? (
-                    <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--muted, #94a3b8)' }}>
-                      Generating follow-up…
-                    </p>
-                  ) : null}
-
-                  {!isCoding && followupPhase === 'awaiting' && followupQuestionText ? (
-                    <div
-                      style={{
-                        marginTop: 14,
-                        padding: '14px 16px',
-                        borderRadius: 10,
-                        background: 'rgba(99, 102, 241, 0.12)',
-                        border: '1px solid rgba(129, 140, 248, 0.45)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          color: 'var(--muted, #94a3b8)',
-                          marginBottom: 8,
-                        }}
-                      >
-                        Follow-up:
-                      </div>
-                      <div style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--text-primary, #f1f5f9)' }}>
-                        {followupQuestionText}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="hint-below" hidden={!questionHint && !hintLoading}>
-                    {hintLoading ? 'Getting hint…' : `💡 ${questionHint}`}
-                  </div>
-
-                  <p className="answer-saved-flash" hidden={!answerSavedFlash}>
-                    ✓ Answer saved
-                  </p>
-
-                  {false && (
-                    <div
-                      className="feedback-inline-panel"
-                      hidden={!(feedbackLoading || feedbackData || feedbackError)}
-                    >
-                      {feedbackLoading && (
-                        <p className="feedback-placeholder">
-                          <span className="loading-dots">Analysing your answer</span>
-                        </p>
-                      )}
-                      {feedbackError && !feedbackLoading && (
-                        <p className="err-text">
-                          {feedbackError}
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            style={{ marginTop: 12 }}
-                            onClick={() => fetchAiFeedback()}
-                          >
-                            Retry
-                          </button>
-                        </p>
-                      )}
-                      {feedbackData && !feedbackLoading && (
-                        <>
-                          <div className="feedback-head" style={{ marginBottom: 10 }}>
-                            Feedback
-                          </div>
-                          <div className="score-display">
-                            <span className="score-display__main">
-                              {Number(feedbackData.score).toFixed(1)}
-                            </span>
-                            <span className="score-display__sub">/10</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="answer-wrap answer-wrap--stretch">
-                    <textarea
-                      className="answer-area"
-                      placeholder="Type your answer or use the mic…"
-                      aria-label="Your answer"
-                      rows={6}
-                      readOnly={readOnly}
-                      value={readOnly ? currentSlot?.text || '' : answer + speechInterim}
-                      onChange={(e) => {
-                        setSpeechInterim('');
-                        setAnswer(e.target.value);
-                      }}
-                      onPaste={(e) => {
-                        const text = e.clipboardData?.getData('text') || '';
-                        if (text.length > 100) {
-                          e.preventDefault();
-                          showToast(
-                            'Large pastes are disabled in interview mode. Type your answer.',
-                            true
-                          );
-                          logViolation(`textarea_paste_${text.length}_chars`, 'large_paste_blocked');
-                        }
-                      }}
-                      disabled={controlsDisabled || readOnly}
-                    />
-                    <span className="char-count">
-                      {readOnly ? (currentSlot?.text || '').length : charCount} / 2000
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
-        </div>
-
-        {!isCoding && (
-          <div
-            className="interview-action-bar controls-row controls-row--answer controls-row--interview-nav"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-            }}
+        <h2>Settings</h2>
+        <div className="settings-timer-label">Theme</div>
+        <div className="timer-pill-row">
+          <button
+            type="button"
+            className={`timer-pill ${themeMode === 'dark' ? 'active' : ''}`}
+            onClick={() => { applyTheme('dark'); setThemeMode('dark'); }}
           >
-            <div className="interview-action-bar__left">
-              <button
-                type="button"
-                className="btn btn-ghost controls-row__prev"
-                disabled={loadingQuestions || questionIndex === 0 || controlsDisabled || (!isCoding && followupPhase !== 'idle')}
-                onClick={goPrev}
-              >
-                ← Previous
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost controls-row__clear"
-                onClick={() => {
-                  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                    window.speechSynthesis.cancel();
-                  }
-                  setTtsSpeaking(false);
-                  setAnswer('');
-                  setSpeechInterim('');
-                  if (captionOn) setCaptionText('');
-                }}
-                disabled={controlsDisabled || readOnly}
-              >
-                Clear
-              </button>
-              {!selfPaced && (
-                <button
-                  type="button"
-                  className={`record-fab controls-row__mic ${recording ? 'recording' : ''}`}
-                  aria-label={recording ? 'Stop recording' : 'Record answer'}
-                  aria-pressed={recording}
-                  onClick={toggleRecord}
-                  disabled={controlsDisabled || readOnly}
-                >
-                  <IconMic />
-                </button>
-              )}
-            </div>
-            <span style={{ flex: 1 }} aria-hidden />
-            <div className="interview-action-bar__right" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {!isCoding && followupPhase !== 'idle' ? (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => void handleSkipFollowup()}
-                  disabled={controlsDisabled || readOnly || guestSubmitLocked}
-                >
-                  Skip follow-up
-                </button>
-              ) : null}
-              {!currentQuestionSubmitted && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void handleSubmit()}
-                  disabled={controlsDisabled || readOnly || guestSubmitLocked || (!isCoding && followupPhase === 'loading')}
-                >
-                  {!isCoding && followupPhase === 'awaiting' ? 'Submit follow-up' : 'Submit'}
-                </button>
-              )}
-              {currentQuestionSubmitted && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={goNext}
-                  disabled={questionIndex >= totalQ - 1 || controlsDisabled}
-                >
-                  {feedbackLoading ? 'Getting feedback...' : 'Next →'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="caption-dock" hidden={!captionOn || !captionText}>
-          {captionText}
+            Dark
+          </button>
+          <button
+            type="button"
+            className={`timer-pill ${themeMode === 'light' ? 'active' : ''}`}
+            onClick={() => { applyTheme('light'); setThemeMode('light'); }}
+          >
+            Light
+          </button>
+        </div>
+        <div className="settings-timer-label">Session timer</div>
+        <div className="timer-pill-row">
+          {[
+            { id: '15', label: '15 min' },
+            { id: '30', label: '30 min' },
+            { id: '45', label: '45 min' },
+            { id: 'none', label: 'No limit' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`timer-pill ${timerPreset === t.id ? 'active' : ''}`}
+              onClick={() => {
+                setTimerPreset(t.id);
+                try {
+                  localStorage.setItem('timerPref', t.id);
+                  localStorage.setItem('timerPreset', t.id);
+                } catch { /* ignore */ }
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="settings-row">
+          <label>Display</label>
+          <button type="button" className="a11y-chip" aria-pressed={captionOn} onClick={() => setCaptionOn((c) => !c)}>Live captions</button>
+          <button type="button" className="a11y-chip" aria-pressed={readAloudOn} onClick={() => setReadAloudOn((r) => !r)}>Read aloud</button>
+          <button type="button" className="a11y-chip" aria-pressed={highContrast} onClick={() => setHighContrast((h) => !h)}>High contrast</button>
+          <button type="button" className="a11y-chip" aria-pressed={largeText} onClick={() => setLargeText((x) => !x)}>Large text</button>
         </div>
       </div>
 
+      {/* ── Center AI Interview Studio Stage ── */}
+      <StudioStage
+        questionIndex={questionIndex}
+        totalQuestions={totalQ}
+        submittedCount={submittedCount}
+        mode={mode}
+        persona={interviewerPersona}
+        questionText={isCoding ? currentProblem?.title : currentTextQuestion}
+        answerText={isCoding ? codeBody : answer}
+        onAnswerChange={isCoding ? setCodeBody : setAnswer}
+        onSubmit={handleUnifiedSubmit}
+        onHint={getHint}
+        onNext={handleNext}
+        onPrev={goPrev}
+        recording={recording}
+        onMicToggle={toggleRecord}
+        cameraActive={videoActive}
+        onCameraToggle={toggleCamera}
+        submitting={feedbackLoading || loadingQuestions}
+        isCoding={isCoding}
+        isSubmitted={answerSlots[questionIndex]?.submitted}
+        currentProblem={currentProblem}
+        loadingQuestions={loadingQuestions}
+        codeLang={codeLang}
+        setCodeLang={setCodeLang}
+        onRunCode={handleCodingRunClick}
+        codingCaseRows={codingCaseRows}
+      >
+        {isCoding && (
+          <CodeWorkspace
+            value={codeBody}
+            onChange={setCodeBody}
+            language={codeLang}
+            onLanguageChange={setCodeLang}
+            templates={currentProblem?.templates}
+            editorTheme={themeMode === 'dark' ? 'vs-dark' : 'vs'}
+          />
+        )}
+      </StudioStage>
+
+      {/* ── Right AI Evaluation Inspector ── */}
+      {(!isCoding || currentQuestionSubmitted) && (
+        <StudioInspector
+          feedbackData={feedbackData}
+          feedbackLoading={feedbackLoading}
+          feedbackError={feedbackError}
+          sessionHistory={computedSessionHistory}
+          onSelectHistoryItem={(item) => {
+            setFeedbackData(item.feedback || null);
+            setFeedbackError(null);
+          }}
+          questionHint={questionHint}
+          hintLoading={hintLoading}
+          onViewReport={() => {
+            const sid = activeSessionIdRef.current || lastSessionIdRef.current;
+            if (sid) router.push(`/report?session_id=${encodeURIComponent(sid)}`);
+            else showToast('Complete a scored answer to open a saved report.', true);
+          }}
+        />
+      )}
+
       {feedbackModalOpen && (
+
         <>
           <div className="feedback-fab-backdrop" onClick={() => setFeedbackModalOpen(false)} aria-hidden />
           <div className="feedback-fab-modal" role="dialog">
@@ -3495,8 +2946,26 @@ export default function InterviewApp() {
       )}
 
       {/* Setup Modal */}
-      <div className={`session-overlay ${setupModalOpen ? 'open' : ''}`} style={{ zIndex: 100 }}>
-        <div className="session-card" role="dialog" aria-modal="true" aria-label="Setup Interview">
+      <div 
+        className={`session-overlay ${setupModalOpen ? 'open' : ''}`} 
+        style={{ zIndex: 100 }}
+        onClick={() => setSetupModalOpen(false)}
+      >
+        <div 
+          className="session-card" 
+          role="dialog" 
+          aria-modal="true" 
+          aria-label="Setup Interview"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button 
+            type="button" 
+            className="modal-close" 
+            aria-label="Close" 
+            onClick={() => setSetupModalOpen(false)}
+          >
+            ✕
+          </button>
           <h2 style={{ margin: '0 0 16px', fontSize: 20 }}>Configure Your Interview</h2>
 
           <div style={{ marginBottom: 16 }}>
@@ -3605,17 +3074,34 @@ export default function InterviewApp() {
             </label>
           </div>
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ width: '100%', padding: '12px' }}
-            onClick={() => {
-              setInterviewStarted(true);
-              setSetupModalOpen(false);
-            }}
-          >
-            Start Interview
-          </button>
+          <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ flex: 1, padding: '12px' }}
+              onClick={() => setSetupModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ flex: 1, padding: '12px' }}
+              onClick={() => {
+                try {
+                  localStorage.setItem('setup_mode', mode);
+                  localStorage.setItem('setup_role', selectedRole);
+                  localStorage.setItem('setup_persona', interviewerPersona);
+                  localStorage.setItem('setup_timer', timerPreset);
+                  localStorage.setItem('setup_selfPaced', selfPaced);
+                } catch {}
+                setInterviewStarted(true);
+                setSetupModalOpen(false);
+              }}
+            >
+              Start Interview
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3858,7 +3344,7 @@ export default function InterviewApp() {
           </div>
           {sessionGrade !== '—' ? <div className="grade-badge">{sessionGrade}</div> : null}
           <div className="breakdown-label">Question breakdown</div>
-          {sessionHistory.map((item, i) => (
+          {computedSessionHistory.map((item, i) => (
             <div key={i} className="rb-row">
               <div className="rb-row-bar">
                 <span className="rb-q">{(item.q || '').substring(0, 48)}…</span>
@@ -4083,7 +3569,7 @@ export default function InterviewApp() {
             </button>
           </div>
           {historyLoading && <div className="history-row">Loading…</div>}
-          {historySessionItems.map((h) => (
+          {computedSessionHistory.slice().reverse().map((h) => (
             <div key={h.key} className="history-row">
               <div
                 className="history-row__score"
@@ -4199,6 +3685,7 @@ export default function InterviewApp() {
         {toast.msg}
       </div>
     </div>
-  );
+  </div>
+);
 }
 

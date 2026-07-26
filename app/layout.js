@@ -2,6 +2,8 @@ import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import './globals.css';
 import ThemeInit from './components/ThemeInit';
 import GlobalChrome from './components/GlobalChrome';
+import MaintenanceScreen from './components/system/MaintenanceScreen';
+import GlobalErrorBoundary from './components/system/GlobalErrorBoundary';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -56,7 +58,9 @@ export default function RootLayout({ children }) {
     <html lang="en" className={`${inter.variable} ${plexMono.variable}`}>
       <body>
         <ThemeInit />
-        {children}
+        <GlobalErrorBoundary>
+          <MaintenanceScreen>{children}</MaintenanceScreen>
+        </GlobalErrorBoundary>
         <GlobalChrome />
       </body>
     </html>

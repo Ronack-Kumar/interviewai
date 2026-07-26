@@ -320,7 +320,7 @@ export default function LandingPage() {
       {/* ── Hairline Header with Shrink on Scroll ───────────────────────── */}
       <motion.header
         className={`v2-header ${scrolled ? 'scrolled' : ''}`}
-        initial={{ y: -20, opacity: 0 }}
+        initial={{ y: 0, opacity: 1 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
       >
@@ -434,7 +434,7 @@ export default function LandingPage() {
             <div className="v2-hero-grid">
               {/* Left Column: Terse Headline Assembly */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 1, y: 0 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, ease: 'easeOut' }}
               >
@@ -492,7 +492,7 @@ export default function LandingPage() {
 
               {/* Right Column: Hero Stage with Subtle Floating Drift */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.96 }}
+                initial={{ opacity: 1, scale: 1 }}
                 animate={{ opacity: 1, scale: 1, y: [0, -4, 0] }}
                 transition={{
                   opacity: { duration: 0.5 },
@@ -667,7 +667,7 @@ export default function LandingPage() {
         <motion.section
           id="showcase"
           className="v2-showcase-section"
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.4 }}
@@ -756,7 +756,7 @@ export default function LandingPage() {
         <motion.section
           id="comparison"
           className="v2-comp-section"
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.4 }}
@@ -819,7 +819,7 @@ export default function LandingPage() {
         <motion.section
           id="architecture"
           className="v2-pipeline-section"
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.4 }}
@@ -875,7 +875,7 @@ export default function LandingPage() {
         {/* ── Section 5: Feature Deep-Dives (Split Views) ────────────────── */}
         <motion.section
           style={{ padding: '6rem 0', borderTop: '1px solid #16181d' }}
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 1, y: 0 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.4 }}

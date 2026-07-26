@@ -275,7 +275,8 @@ export default function LiveInterviewClient() {
         try {
           await speakWithElevenLabs(text, ttsAudioRef);
           return;
-        } catch {
+        } catch (err) {
+          if (!ttsAudioRef.current) return; // Manually stopped, do not fallback
           /* fall through to Web Speech */
         }
       }
