@@ -5,8 +5,8 @@
  * Groq primary → Gemini model-chain fallback (via shared aiRouter).
  * Per-user daily rate limiting (via shared rateLimit helper).
  *
- * Note: previously this route only fell back to a single Gemini model
- * (gemini-2.0-flash), skipping the full model-chain fallback.
+ * Note: previously this route only fell back to a single Gemini model,
+ * skipping the full model-chain fallback.
  * Now uses the shared aiRouter which tries the full ordered model list.
  */
 

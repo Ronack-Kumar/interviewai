@@ -850,7 +850,7 @@ export default function LandingPage() {
                   <IconShield size={14} /> NODE 02 • FAILOVER CHAIN
                 </div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#ffffff', marginBottom: '0.5rem' }}>
-                  Gemini Flash 2.0 Fallback
+                  Gemini 3.6 Flash Fallback
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
                   If Groq hits a 429 rate limit or network disruption, the shared AI router seamlessly falls back to a Gemini model chain without interrupting user flow.

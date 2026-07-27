@@ -556,6 +556,7 @@ export default function InterviewApp() {
   const [hiringDecisionLoading, setHiringDecisionLoading] = useState(false);
   const [hiringDecisionError, setHiringDecisionError] = useState('');
   const hiringModalSeqRef = useRef(0);
+  const isPrefetchingRef = useRef(false);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [interviewStarted, setInterviewStarted] = useState(true);
 
@@ -694,7 +695,7 @@ export default function InterviewApp() {
   const questions = currentQuestions;
   const currentTextQuestion = currentQuestions[questionIndex] || '';
   const currentProblem = filteredProblems[questionIndex] || null;
-  const totalQ = isCoding ? filteredProblems.length || 8 : currentQuestions.length || 8;
+  const totalQ = isCoding ? 4 : (currentQuestions.length || 8);
   const charCount = (answer + speechInterim).length;
   const submittedCount = answerSlots.filter((s) => s.submitted).length;
   const progressPct =
@@ -795,7 +796,8 @@ export default function InterviewApp() {
               resumeText: rt || '',
               role: selectedRole,
               persona: interviewerPersona,
-              difficulty: 'medium',
+              difficulty: 'Easy',
+              history: [],
             }
             : {
               mode,
@@ -826,10 +828,10 @@ export default function InterviewApp() {
         if (mode === 'coding') {
           const probs = data.problems;
           if (!probs || !Array.isArray(probs)) throw new Error('Invalid coding response');
-          const list = probs.slice(0, 8);
-          setCodingProblems(list);
+          // Only the first problem is returned initially
+          setCodingProblems(probs);
           setCurrentQuestions([]);
-          const first = list[0];
+          const first = probs[0];
           const tpl = first?.templates || {};
           const starter = tpl[codeLang] || tpl.python || Object.values(tpl)[0] || STUB_TEMPLATES.python;
           setCodeBody(starter);
@@ -892,8 +894,76 @@ export default function InterviewApp() {
         setControlsDisabled(false);
       }
     },
-    [mode, activePack, resumeText, selectedRole, interviewerPersona, clearFeedback, showToast, bumpSessionCounter, timerPreset]
+    [mode, activePack, resumeText, selectedRole, interviewerPersona, clearFeedback, showToast, bumpSessionCounter, timerPreset, codeLang]
   );
+
+  // Background Prefetch Worker for Coding Questions
+  useEffect(() => {
+    if (mode !== 'coding' || codingProblems.length === 0 || codingProblems.length >= 4) return;
+    if (isPrefetchingRef.current) return;
+    
+    let isCancelled = false;
+    
+    const prefetchNext = async () => {
+      isPrefetchingRef.current = true;
+      try {
+        const nextIndex = codingProblems.length;
+        // Progression: Q1=Easy, Q2=Medium, Q3=Medium, Q4=Hard
+        const nextDifficulty = nextIndex === 3 ? 'Hard' : 'Medium';
+        const history = codingProblems.map(p => p.title);
+        
+        const payload = {
+          mode: 'coding',
+          pack: activePack,
+          resumeText: resumeText || '',
+          role: selectedRole,
+          persona: interviewerPersona,
+          difficulty: nextDifficulty,
+          history,
+          user_id: userId || undefined
+        };
+        
+        const res = await fetch('/api/questions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) throw new Error('Prefetch failed');
+        const data = await res.json();
+        const probs = data.problems;
+        
+        if (!probs || !probs[0]) throw new Error('Invalid prefetch response');
+        
+        if (!isCancelled) {
+          setCodingProblems(prev => {
+            // Ensure we don't duplicate if another request sneaked in
+            if (prev.length > nextIndex) return prev;
+            return [...prev, probs[0]];
+          });
+        }
+      } catch (err) {
+        console.error('[Prefetch] Background generation failed:', err.message);
+        if (!isCancelled) {
+          // Fallback to exactly 1 offline problem
+          const allOffline = buildStubProblems();
+          setCodingProblems(prev => {
+            const nextOffline = allOffline[prev.length];
+            if (!nextOffline) return prev;
+            return [...prev, nextOffline];
+          });
+        }
+      } finally {
+        if (!isCancelled) isPrefetchingRef.current = false;
+      }
+    };
+    
+    prefetchNext();
+    
+    return () => {
+      isCancelled = true;
+    };
+  }, [mode, codingProblems, activePack, resumeText, selectedRole, interviewerPersona, userId]);
 
   const setMode = useCallback((m) => {
     setModeState(m);

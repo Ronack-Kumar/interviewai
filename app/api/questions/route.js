@@ -52,19 +52,105 @@ function setCache(key, data) {
 
 // ── Shared JSON parser ────────────────────────────────────────────────────────
 
-function safeParseJSON(text) {
-  let clean = text.replace(/```json|```/g, '').trim();
-  clean = clean.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-  clean = clean.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
-  clean = clean.replace(/"([^"]*)"/g, (match) =>
-    match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
-  );
+class MalformedJSONError extends Error {
+  constructor(message, diagnostic) {
+    super(message);
+    this.name = 'MalformedJSONError';
+    this.diagnostic = diagnostic;
+  }
+}
+
+function safeParseJSON(aiResult) {
+  const { text, provider, rawData, status, model, finishReason } = aiResult;
+  
+  if (!text) {
+    throw new MalformedJSONError('Empty response text', { provider, model, finishReason, status, rawResponse: rawData, extractedText: text, parserFailureReason: 'No text extracted' });
+  }
+
+  let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  let startIndex = -1;
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i] === '{' || clean[i] === '[') {
+      startIndex = i;
+      break;
+    }
+  }
+
+  if (startIndex === -1) {
+    throw new MalformedJSONError('No valid JSON start character found', { provider, model, finishReason, status, rawResponse: rawData, extractedText: text, parserFailureReason: 'Missing { or [' });
+  }
+
+  let stack = [];
+  let inString = false;
+  let escape = false;
+  let endIndex = -1;
+
+  for (let i = startIndex; i < clean.length; i++) {
+    const char = clean[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (char === '\\') escape = true;
+      else if (char === '"') inString = false;
+    } else {
+      if (char === '"') inString = true;
+      else if (char === '{' || char === '[') stack.push(char);
+      else if (char === '}' || char === ']') {
+        const last = stack.pop();
+        if ((char === '}' && last !== '{') || (char === ']' && last !== '[')) {
+          throw new MalformedJSONError('Mismatched JSON braces/brackets', { provider, model, finishReason, status, rawResponse: rawData, extractedText: text, parserFailureReason: `Mismatched ${char} at index ${i}` });
+        }
+        if (stack.length === 0) {
+          endIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (endIndex === -1) {
+    throw new MalformedJSONError('Unterminated JSON structure', { provider, model, finishReason, status, rawResponse: rawData, extractedText: text, parserFailureReason: 'End of string reached before JSON closed' });
+  }
+
+  const jsonStr = clean.substring(startIndex, endIndex + 1);
+
+  // Normalize literal newlines in strings, dropping control chars, preserving escapes
+  let normalized = '';
+  inString = false;
+  escape = false;
+  
+  for (let i = 0; i < jsonStr.length; i++) {
+    const char = jsonStr[i];
+    if (inString) {
+      if (escape) {
+        normalized += char;
+        escape = false;
+      } else if (char === '\\') {
+        normalized += char;
+        escape = true;
+      } else if (char === '"') {
+        normalized += char;
+        inString = false;
+      } else if (char === '\n') {
+        normalized += '\\n';
+      } else if (char === '\r') {
+        normalized += '\\r';
+      } else if (char === '\t') {
+        normalized += '\\t';
+      } else {
+        const code = char.charCodeAt(0);
+        if (code >= 32) normalized += char;
+      }
+    } else {
+      if (char === '"') inString = true;
+      normalized += char;
+    }
+  }
+
   try {
-    return JSON.parse(clean);
-  } catch {
-    const match = clean.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-    if (!match) throw new Error('No valid JSON found in response');
-    return JSON.parse(match[1]);
+    return JSON.parse(normalized);
+  } catch (err) {
+    throw new MalformedJSONError('SyntaxError during JSON.parse', { provider, model, finishReason, status, rawResponse: rawData, extractedText: text, parserFailureReason: err.message, exactStringPassed: normalized });
   }
 }
 
@@ -120,7 +206,7 @@ export async function POST(request) {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { mode, pack, resumeText, role, persona: personaRaw, user_id } = body;
+  const { mode, pack, resumeText, role, persona: personaRaw, user_id, difficulty = 'Medium', history = [] } = body;
 
   if (!mode) {
     return Response.json({ error: 'mode is required' }, { status: 400 });
@@ -140,7 +226,7 @@ export async function POST(request) {
   if (!allowed) return rateLimitedResponse(resetAt);
 
   // ── Deduplication cache check ──
-  const cacheKey = hashRequest({ mode, pack, role, persona: normalizePersona(personaRaw), resumeText: (resumeText || '').slice(0, 50) });
+  const cacheKey = hashRequest({ mode, pack, role, persona: normalizePersona(personaRaw), resumeText: (resumeText || '').slice(0, 50), difficulty, history: history.join(',') });
   const cached = getCached(cacheKey);
   if (cached) {
     console.log('✅ Questions served from cache (dedup)');
@@ -171,47 +257,50 @@ export async function POST(request) {
   const t0 = Date.now();
 
   if (mode === 'coding') {
-    const systemPrompt = `You are an expert coding interview author. Generate exactly 6 unique algorithmic problems as a JSON array ONLY (no markdown).
-Each element must be an object with these keys:
+    const systemPrompt = `You are an expert coding interview author. Generate exactly 1 algorithmic problem as a JSON array ONLY (no markdown).
+The array must contain exactly 1 element. The element must be an object with these keys:
 - "title": string
 - "difficulty": "Easy" | "Medium" | "Hard"
-- "description": string (full problem statement)
+- "description": string (concise problem statement)
 - "constraints": array of strings
-- "examples": array of objects {"input": string, "output": string, "explanation": string}
-- "visibleTests": array of exactly 3 objects {"input": string, "output": string} (shown to candidate)
-- "hiddenTests": array of exactly 2 objects {"input": string, "output": string} (not shown; for evaluation only)
+- "examples": array of objects {"input": string, "output": string}
+- "visibleTests": array of exactly 2 objects {"input": string, "output": string}
+- "hiddenTests": array of exactly 2 objects {"input": string, "output": string}
 - "functionSignature": string (e.g., "def twoSum(nums: List[int], target: int) -> List[int]:")
-- "templates": object mapping languages ("python", "javascript", "java", "cpp") to starter code based on the function signature (e.g., {"python": "def twoSum(nums, target):\\n    pass", "javascript": "function twoSum(nums, target) {\\n\\n}"})
 
-Cover these topics, exactly one problem each — no two problems may share the same topic:
-arrays, strings, linked lists, trees, dynamic programming, sorting.
-Each problem JSON object must implicitly reflect its distinct topic (vary problem statements accordingly).
+Keep descriptions and strings as short and concise as possible to save tokens. Do not include templates or explanations.
 No plagiarism — original statements.${personaBlock}`;
 
-    let userPrompt = `Generate 6 coding interview problems for a ${roleLabel} interview. Tailor difficulty mix: 1 Easy, 3 Medium, 2 Hard.
-Enforce one unique topic per problem from the fixed list (arrays, strings, linked lists, trees, dynamic programming, sorting) — no duplicates.`;
+    let userPrompt = `Generate 1 concise coding problem for a ${roleLabel} interview. The difficulty MUST be: ${difficulty}.`;
+    
+    if (history && history.length > 0) {
+      userPrompt += `\nDo NOT generate any problems related to these previously covered topics/titles: ${history.join(', ')}. Ensure the new problem is unique and uses a different topic (e.g. arrays, strings, dynamic programming, etc).`;
+    } else {
+      userPrompt += `\nSelect a standard coding interview topic (e.g. arrays, strings, dynamic programming, etc).`;
+    }
 
     if (safeResume.trim().length > 50) {
-      userPrompt += `\n\nCandidate background (tailor 2-3 problems):\n${safeResume}`;
+      userPrompt += `\n\nCandidate background (tailor the problem if possible):\n${safeResume}`;
     }
 
     try {
-      const { text, provider } = await callAI({
+      const aiResult = await callAI({
         systemPrompt,
         userContent: userPrompt,
         groqModel:   'llama-3.1-8b-instant',
         temperature: 0.75,
-        maxTokens:   4096,
+        maxTokens:   8192,
       });
 
-      const parsed = safeParseJSON(text);
+      const parsed = safeParseJSON(aiResult);
+      const provider = aiResult.provider;
       parsed.forEach((p) => { if (!p.templates) p.templates = starterTemplates; });
 
       if (!Array.isArray(parsed) || parsed.length === 0) {
         throw new Error('Response was not a valid array');
       }
 
-      const result = { problems: parsed.slice(0, 6) };
+      const result = { problems: parsed.slice(0, 1) };
       setCache(cacheKey, result);
       console.log(`✅ Questions (coding) served by ${provider}`);
       logAIUsage({ userKey, route: 'questions/coding', provider, success: true, latencyMs: Date.now() - t0 });
@@ -219,6 +308,15 @@ Enforce one unique topic per problem from the fixed list (arrays, strings, linke
     } catch (err) {
       logAIUsage({ userKey, route: 'questions/coding', provider: 'none', success: false, latencyMs: Date.now() - t0 });
       if (err instanceof AiCapacityError) return aiCapacityResponse(err);
+      
+      if (err.name === 'MalformedJSONError') {
+        console.error('Questions (coding) API Malformed JSON:', JSON.stringify(err.diagnostic, null, 2));
+        return Response.json(
+          { error: 'Failed to generate coding problems', detail: 'Received malformed JSON from AI provider', diagnostic: err.diagnostic },
+          { status: 500 }
+        );
+      }
+
       console.error('Questions (coding) API error:', err);
       return Response.json(
         { error: 'Failed to generate coding problems', detail: err.message },
@@ -247,15 +345,16 @@ Make questions varied in difficulty and topic. Avoid repetition.${personaBlock}`
   userPrompt += ' Ensure all 8 questions are unique and cover different topics. Do not repeat common generic questions.';
 
   try {
-    const { text, provider } = await callAI({
+    const aiResult = await callAI({
       systemPrompt,
       userContent:  userPrompt,
       groqModel:    'llama-3.3-70b-versatile',
       temperature:  0.95,
-      maxTokens:    800,
+      maxTokens:    2500,
     });
 
-    const parsed = safeParseJSON(text);
+    const parsed = safeParseJSON(aiResult);
+    const provider = aiResult.provider;
     if (!Array.isArray(parsed) || parsed.length === 0) {
       throw new Error('Response was not a valid array');
     }
@@ -268,6 +367,15 @@ Make questions varied in difficulty and topic. Avoid repetition.${personaBlock}`
   } catch (err) {
     logAIUsage({ userKey, route: 'questions', provider: 'none', success: false, latencyMs: Date.now() - t0 });
     if (err instanceof AiCapacityError) return aiCapacityResponse(err);
+    
+    if (err.name === 'MalformedJSONError') {
+      console.error('Questions API Malformed JSON:', JSON.stringify(err.diagnostic, null, 2));
+      return Response.json(
+        { error: 'Failed to generate questions', detail: 'Received malformed JSON from AI provider', diagnostic: err.diagnostic },
+        { status: 500 }
+      );
+    }
+
     console.error('Questions API error:', err);
     return Response.json({ error: 'Failed to generate questions', detail: err.message }, { status: 500 });
   }
