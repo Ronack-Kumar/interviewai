@@ -66,7 +66,7 @@ function normalizeHiring(parsed) {
   const verdict = VERDICTS.has(parsed?.verdict) ? parsed.verdict : 'Borderline';
   let overall   = Number(parsed?.overall_score);
   if (!Number.isFinite(overall)) overall = 5;
-  overall = Math.min(10, Math.max(1, overall));
+  overall = Math.min(10, Math.max(0, overall));
   const keyStrength      = optSentence(parsed?.key_strength, 800) ?? optSentence(parsed?.keyStrength, 800);
   const criticalWeakness = optSentence(parsed?.critical_weakness, 800) ?? optSentence(parsed?.criticalWeakness, 800);
   return {

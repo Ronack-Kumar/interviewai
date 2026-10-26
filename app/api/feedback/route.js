@@ -6,13 +6,13 @@
  * Per-user daily rate limiting (via shared rateLimit helper).
  */
 
-import { AiCapacityError, aiCapacityResponse, callAI } from '../../../lib/aiRouter';
+import { AiCapacityError, aiCapacityResponse, callAI } from '../../../lib/aiRouter.js';
 import {
   checkAndIncrement,
   getUserKey,
   logAIUsage,
   rateLimitedResponse,
-} from '../../../lib/rateLimit';
+} from '../../../lib/rateLimit.js';
 
 // ── System prompts ────────────────────────────────────────────────────────────
 
@@ -70,15 +70,30 @@ const PERSONA_FEEDBACK_ADDENDUM = {
   tcs_infosys: `Interviewer persona — TCS/Infosys style: use a formal, process-oriented tone. Emphasize fundamentals, project specifics, ownership, and clarity of implementation details in your feedback.`,
 };
 
+const SCORING_RUBRIC = `
+
+CRITICAL SCORING RUBRIC & SCALE (Strictly Enforce):
+- "score": A number strictly from 0 to 10 (integers or 1 decimal place, e.g. 7 or 7.5).
+- "accuracy", "clarity", "depth": Numbers strictly from 0 to 100.
+- Meaningless/Gibberish/Nonsense answers (e.g. 'asdasdasda', random keystrokes, 'idk', completely irrelevant text, or non-answers):
+  MUST receive score: 0, accuracy: 0, clarity: 0, depth: 0, star_score: 0.
+  Feedback MUST state: "The submitted response is invalid, meaningless, or completely off-topic."
+  ScoreReason MUST state: "No valid answer content provided to evaluate."
+- Completely incorrect or fundamentally flawed answers: score 1 to 3.
+- Incomplete, superficial, or partially correct answers: score 4 to 6.
+- Competent, technically accurate, well-structured answers: score 7 to 8.
+- Exceptional, comprehensive, production-grade answers: score 9 to 10.
+- NEVER award 1 or higher for gibberish or nonsense.
+- Output ONLY a single JSON object.`;
+
 function buildFeedbackSystem(mode, persona) {
   const base = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.technical;
   const p    = normalizePersona(persona);
   const add  = PERSONA_FEEDBACK_ADDENDUM[p];
-  const gibberishRule = "\n\nCRITICAL: If the candidate's answer is gibberish (e.g. 'asdasdasd'), blank, or completely irrelevant, you MUST reject it with a score of 1 or 0, and set feedback to 'Invalid or irrelevant answer provided.' Do not provide a high score for nonsense.";
-  return (add ? `${base}\n\n${add}` : base) + gibberishRule;
+  return (add ? `${base}\n\n${add}` : base) + SCORING_RUBRIC;
 }
 
-// ── Response parsing ──────────────────────────────────────────────────────────
+// ── Response parsing and normalization ───────────────────────────────────────
 
 const MAX_QUESTION = 12000;
 const MAX_ANSWER   = 50000;
@@ -95,6 +110,69 @@ function parseResponse(text) {
   return JSON.parse(clean);
 }
 
+export function validateAndNormalizeFeedback(parsed, mode) {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('AI evaluation returned invalid non-object payload');
+  }
+
+  let rawScore = parsed.score;
+  let score = Number(rawScore);
+  if (!Number.isFinite(score)) {
+    throw new Error(`AI evaluation returned non-numeric score: ${rawScore}`);
+  }
+  if (score > 10 && score <= 100) {
+    score = score / 10;
+  }
+  score = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
+
+  let accuracy = Number(parsed.accuracy);
+  if (!Number.isFinite(accuracy)) accuracy = Math.round(score * 10);
+  accuracy = Math.max(0, Math.min(100, Math.round(accuracy)));
+
+  let clarity = Number(parsed.clarity);
+  if (!Number.isFinite(clarity)) clarity = Math.round(score * 10);
+  clarity = Math.max(0, Math.min(100, Math.round(clarity)));
+
+  let depth = Number(parsed.depth);
+  if (!Number.isFinite(depth)) depth = Math.round(score * 10);
+  depth = Math.max(0, Math.min(100, Math.round(depth)));
+
+  let starScore = undefined;
+  if (mode === 'hr') {
+    let rawStar = parsed.star_score ?? parsed.starScore;
+    if (rawStar != null) {
+      let s = Number(rawStar);
+      if (Number.isFinite(s)) {
+        starScore = Math.max(0, Math.min(4, Math.round(s)));
+      }
+    }
+  }
+
+  const feedback = typeof parsed.feedback === 'string' && parsed.feedback.trim()
+    ? parsed.feedback.trim()
+    : (typeof parsed.critique === 'string' && parsed.critique.trim() ? parsed.critique.trim() : '');
+
+  if (!feedback) {
+    throw new Error('AI evaluation returned empty feedback text');
+  }
+
+  const scoreReason = typeof parsed.scoreReason === 'string' ? parsed.scoreReason.trim() : '';
+  const idealAnswer = typeof parsed.idealAnswer === 'string' ? parsed.idealAnswer.trim()
+    : typeof parsed.idealResponse === 'string' ? parsed.idealResponse.trim() : '';
+
+  return {
+    score,
+    accuracy,
+    clarity,
+    depth,
+    ...(starScore !== undefined ? { star_score: starScore, starScore } : {}),
+    feedback,
+    scoreReason,
+    idealAnswer,
+    idealResponse: idealAnswer,
+  };
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request) {
@@ -108,16 +186,19 @@ export async function POST(request) {
   const { question, answer, mode, role, persona: personaRaw, user_id } = body;
 
   // ── Input validation ──
-  if (!question || !answer) {
-    return Response.json({ error: 'question and answer are required' }, { status: 400 });
+  if (!question || typeof question !== 'string' || !question.trim()) {
+    return Response.json({ error: 'Question is required' }, { status: 400 });
   }
-  if (typeof question !== 'string' || question.length > MAX_QUESTION) {
+  if (!answer || typeof answer !== 'string' || !answer.trim()) {
+    return Response.json({ error: 'Answer cannot be empty' }, { status: 400 });
+  }
+  if (question.length > MAX_QUESTION) {
     return Response.json(
       { error: `Invalid question — max ${MAX_QUESTION} characters` },
       { status: 400 }
     );
   }
-  if (typeof answer !== 'string' || answer.length > MAX_ANSWER) {
+  if (answer.length > MAX_ANSWER) {
     return Response.json(
       { error: `Answer too long — maximum ${MAX_ANSWER} characters` },
       { status: 400 }
@@ -162,19 +243,20 @@ ${answer}`;
     return Response.json({ error: 'AI provider error', detail: err.message }, { status: 500 });
   }
 
-  // ── Parse and return ──
+  // ── Parse and validate ──
   try {
-    const parsed = parseResponse(text);
-    return Response.json(parsed, { status: 200 });
-  } catch {
+    const rawParsed = parseResponse(text);
+    const validated = validateAndNormalizeFeedback(rawParsed, mode);
+    return Response.json(validated, { status: 200 });
+  } catch (parseErr) {
+    console.error('❌ Feedback validation / parsing error:', parseErr.message);
     return Response.json(
       {
-        score: 5, accuracy: 50, clarity: 50, depth: 50,
-        feedback: 'Feedback could not be fully parsed. Please try again.',
-        scoreReason: 'Response was truncated.',
-        idealAnswer: '',
+        error: 'evaluation_parse_error',
+        message: 'The AI evaluation response was malformed or could not be validated. Please retry.',
+        detail: parseErr.message,
       },
-      { status: 200 }
+      { status: 502 }
     );
   }
 }

@@ -557,6 +557,7 @@ export default function InterviewApp() {
   const [hiringDecisionError, setHiringDecisionError] = useState('');
   const hiringModalSeqRef = useRef(0);
   const isPrefetchingRef = useRef(false);
+  const inFlightSubmissionRef = useRef(false);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [interviewStarted, setInterviewStarted] = useState(true);
 
@@ -676,7 +677,7 @@ export default function InterviewApp() {
   const computedSessionHistory = useMemo(() => {
     return answerSlots
       .map((slot, idx) => {
-        if (!slot.submitted) return null;
+        if (!slot.submitted || slot.err) return null;
         const qLabel = isCoding ? (codingProblems[idx]?.title || 'Coding') : (currentQuestions[idx] || '');
         return {
           originalIndex: idx,
@@ -697,14 +698,18 @@ export default function InterviewApp() {
   const currentProblem = filteredProblems[questionIndex] || null;
   const totalQ = isCoding ? 4 : (currentQuestions.length || 8);
   const charCount = (answer + speechInterim).length;
-  const submittedCount = answerSlots.filter((s) => s.submitted).length;
+  const submittedCount = answerSlots.filter((s) => s.submitted && !s.err).length;
   const progressPct =
     totalQ > 0 ? Math.min(100, (submittedCount / totalQ) * 100) : 0;
   const navProgressPct = totalQ > 0 ? Math.min(100, ((questionIndex + 1) / totalQ) * 100) : 0;
   const qOrdinal = String(questionIndex + 1).padStart(2, '0');
   const qTotal = String(Math.max(totalQ, 1)).padStart(2, '0');
 
-  const scoreList = answerSlots.map((s) => s.feedback?.score).filter((x) => x != null);
+  const scoreList = useMemo(() => {
+    return answerSlots
+      .filter((s) => s.submitted && !s.err && typeof s.feedback?.score === 'number' && Number.isFinite(s.feedback.score))
+      .map((s) => s.feedback.score);
+  }, [answerSlots]);
   const avgScore =
     scoreList.length > 0
       ? (scoreList.reduce((a, b) => a + b, 0) / scoreList.length).toFixed(1)
@@ -823,7 +828,12 @@ export default function InterviewApp() {
           setRateLimitResetAt(data.resetAt || null);
           throw new Error(data.message || 'Daily limit reached');
         }
-        if (!res.ok) throw new Error(data.error || 'Failed to load');
+        if (!res.ok) {
+          const err = new Error(data.message || data.error || 'Failed to load');
+          err.status = res.status;
+          err.code = data.code || data.error;
+          throw err;
+        }
 
         if (mode === 'coding') {
           const probs = data.problems;
@@ -879,7 +889,7 @@ export default function InterviewApp() {
         if (mode === 'coding' || err.message?.includes('Failed to generate coding problems')) {
           showToast('Loaded curated offline practice problems.', false);
         } else {
-          const classified = classifyError(err);
+          const classified = classifyError(err, err.status);
           showToast(`${classified.title}: ${classified.explanation}`, true);
         }
         if (timerPreset !== 'none') {
@@ -1770,7 +1780,8 @@ export default function InterviewApp() {
   );
 
   const fetchAiFeedback = useCallback(async () => {
-    const s = answerSlots[questionIndex];
+    const targetIndex = questionIndex;
+    const s = answerSlots[targetIndex];
 
     let textAnswer = isCoding ? '' : (s?.text || '').trim();
     let codeAns = isCoding ? (s?.code || '').trim() : '';
@@ -1781,7 +1792,7 @@ export default function InterviewApp() {
       }
       if (!codeAns) {
         showToast('No code to analyse', true);
-        return;
+        return false;
       }
     } else {
       if (!s?.submitted) {
@@ -1789,7 +1800,7 @@ export default function InterviewApp() {
       }
       if (!textAnswer) {
         showToast('No answer to analyse', true);
-        return;
+        return false;
       }
     }
 
@@ -1809,6 +1820,7 @@ export default function InterviewApp() {
       const res = await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
         body: JSON.stringify({
           question: qStr,
           answer: aStr,
@@ -1824,19 +1836,27 @@ export default function InterviewApp() {
         setRateLimitResetAt(parsed.resetAt || null);
         throw new Error(parsed.message || 'Daily limit reached');
       }
-      if (!res.ok || parsed.error) throw new Error(parsed.error || 'Feedback failed');
+      if (!res.ok || parsed.error) {
+        const err = new Error(parsed.message || parsed.error || 'Feedback failed');
+        err.status = res.status;
+        err.code = parsed.code || parsed.error;
+        throw err;
+      }
       setAiCallCount((c) => c + 1);
       if (rateLimited) setRateLimited(false);
 
-      setFeedbackData(parsed);
+      if (targetIndex === questionIndex) {
+        setFeedbackData(parsed);
+      }
 
       setAnswerSlots((prev) => {
         const n = [...prev];
-        n[questionIndex] = {
-          ...n[questionIndex],
+        n[targetIndex] = {
+          ...n[targetIndex],
           feedback: parsed,
           err: null,
           hint: questionHint,
+          submitted: true,
         };
         return n;
       });
@@ -1860,14 +1880,18 @@ export default function InterviewApp() {
       });
       return true;
     } catch (e) {
-      const msg = e.message || 'Failed to get feedback';
-      setFeedbackError(msg);
-      showToast(msg, true);
+      const classified = classifyError(e, e.status);
+      const msg = classified.explanation || e.message || 'Failed to get feedback';
+      if (targetIndex === questionIndex) {
+        setFeedbackError(msg);
+      }
+      showToast(`${classified.title}: ${msg}`, true);
       setAnswerSlots((prev) => {
         const n = [...prev];
-        n[questionIndex] = {
-          ...n[questionIndex],
+        n[targetIndex] = {
+          ...n[targetIndex],
           err: msg,
+          submitted: false,
         };
         return n;
       });
@@ -1890,6 +1914,8 @@ export default function InterviewApp() {
     showToast,
     userId,
     codeBody,
+    rateLimited,
+    saveSessionRemote,
   ]);
 
   const runCodingOutputCases = useCallback(
@@ -1942,30 +1968,36 @@ export default function InterviewApp() {
   }, [questionIndex, totalQ, stashCurrentAnswer]);
 
   const handleUnifiedSubmit = useCallback(async () => {
-    if (isCoding) {
-      if (!codingProblems[questionIndex]) return;
-      const codeAns = (codeBody || '').trim();
-      if (!codeAns) {
-        showToast('Write some code first', true);
-        return;
+    if (inFlightSubmissionRef.current || feedbackLoading) return;
+    inFlightSubmissionRef.current = true;
+    try {
+      if (isCoding) {
+        if (!codingProblems[questionIndex]) return;
+        const codeAns = (codeBody || '').trim();
+        if (!codeAns) {
+          showToast('Write some code first', true);
+          return;
+        }
+        runCodingOutputCases(true);
+        await new Promise((r) => requestAnimationFrame(() => r()));
+      } else {
+        const textAnswer = (answer + speechInterim).trim();
+        if (!textAnswer) {
+          showToast('Please enter or record an answer first', true);
+          return;
+        }
       }
-      runCodingOutputCases(true);
-      await new Promise((r) => requestAnimationFrame(() => r()));
-    } else {
-      const textAnswer = (answer + speechInterim).trim();
-      if (!textAnswer) {
-        showToast('Please enter or record an answer first', true);
-        return;
+      await commitAnswer();
+      const success = await fetchAiFeedback();
+      if (success) {
+        setTimeout(() => {
+          goNext();
+        }, 1000);
       }
+    } finally {
+      inFlightSubmissionRef.current = false;
     }
-    await commitAnswer();
-    const success = await fetchAiFeedback();
-    if (success) {
-      setTimeout(() => {
-        goNext();
-      }, 1000);
-    }
-  }, [isCoding, codingProblems, questionIndex, codeBody, answer, speechInterim, runCodingOutputCases, commitAnswer, fetchAiFeedback, showToast, goNext]);
+  }, [isCoding, codingProblems, questionIndex, codeBody, answer, speechInterim, runCodingOutputCases, commitAnswer, fetchAiFeedback, showToast, goNext, feedbackLoading]);
 
   const handleNext = useCallback(() => {
     goNext();
@@ -2897,7 +2929,8 @@ export default function InterviewApp() {
         onCameraToggle={toggleCamera}
         submitting={feedbackLoading || loadingQuestions}
         isCoding={isCoding}
-        isSubmitted={answerSlots[questionIndex]?.submitted}
+        isSubmitted={!!answerSlots[questionIndex]?.submitted && !answerSlots[questionIndex]?.err}
+        hasError={!!answerSlots[questionIndex]?.err}
         currentProblem={currentProblem}
         loadingQuestions={loadingQuestions}
         codeLang={codeLang}
@@ -2923,6 +2956,7 @@ export default function InterviewApp() {
           feedbackData={feedbackData}
           feedbackLoading={feedbackLoading}
           feedbackError={feedbackError}
+          onRetry={handleUnifiedSubmit}
           sessionHistory={computedSessionHistory}
           onSelectHistoryItem={(item) => {
             setFeedbackData(item.feedback || null);

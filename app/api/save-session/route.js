@@ -35,8 +35,10 @@ export async function POST(request) {
   if (!answer || typeof answer !== 'string' || answer.length > MAX_ANS) {
     return Response.json({ error: 'Invalid answer' }, { status: 400 });
   }
-  const normalizedScore = (score === 0 || score === null || score === undefined) ? null : score;
-  if (normalizedScore !== null && (typeof normalizedScore !== 'number' || normalizedScore < 0 || normalizedScore > 10)) {
+  const normalizedScore = (typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 10)
+    ? score
+    : null;
+  if (score !== null && score !== undefined && (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10)) {
     return Response.json({ error: 'Score must be between 0 and 10' }, { status: 400 });
   }
 
