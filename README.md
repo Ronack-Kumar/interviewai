@@ -1,8 +1,12 @@
 # InterviewAI
 
+The deployed application is currently branded **MockPrep**; this repository keeps the `interviewai` name.
+
 Mock interview practice app I built to help people prep for tech and HR interviews. You answer questions via text, voice, or video and get AI feedback on your response.
 
 Live: https://interviewai-swart.vercel.app
+
+![The deployed MockPrep interview-practice homepage](docs/screenshots/app-preview.webp)
 
 ---
 
@@ -29,7 +33,7 @@ There's also a peer rooms feature where two people can practice together with tu
 You'll need a Groq API key (free at console.groq.com) and a Supabase project.
 
 ```bash
-git clone https://github.com/Raunack/interviewai.git
+git clone https://github.com/Ronack-Kumar/interviewai.git
 cd interviewai
 npm install
 cp .env.example .env.local
