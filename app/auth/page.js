@@ -123,7 +123,8 @@ export default function AuthPage() {
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
-        redirectTo: 'https://interviewai-swart.vercel.app/auth/reset',
+        // the site the user is on (mockprep.app in production, localhost in dev)
+        redirectTo: `${window.location.origin}/auth/reset`,
       });
       if (error) throw error;
       setForgotMsg('Check your email for a reset link');

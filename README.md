@@ -1,10 +1,10 @@
-# InterviewAI
+# MockPrep
 
-The deployed application is currently branded **MockPrep**; this repository keeps the `interviewai` name.
+AI mock interview practice. Live at **[mockprep.app](https://www.mockprep.app)**. (The repository is still named `interviewai`.)
 
 Mock interview practice app I built to help people prep for tech and HR interviews. You answer questions via text, voice, or video and get AI feedback on your response.
 
-Live: https://interviewai-swart.vercel.app
+Live: https://www.mockprep.app
 
 ![The deployed MockPrep interview-practice homepage](docs/screenshots/app-preview.webp)
 
