@@ -1,4 +1,4 @@
-# InterviewAI — Complete Deployment Guide
+# MockPrep — Complete Deployment Guide
 
 ## Your Tech Stack
 | What | Tool | Cost |
@@ -38,7 +38,7 @@
 # In your project folder:
 git init
 git add .
-git commit -m "Initial InterviewAI app"
+git commit -m "Initial MockPrep app"
 
 # Create a NEW private repo at github.com first, then:
 git remote add origin https://github.com/YOUR_USERNAME/interviewai.git
